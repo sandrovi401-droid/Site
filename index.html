@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Azimuth Pro Fixed</title>
+    <title>Azimuth Mobile Real Compass</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -21,42 +21,93 @@
             --bearing: 0;
         }
 
-        body.light { --ui-bg: #f0f2f5; --ui-card: #ffffff; --ui-text: #1c1c1c; --ui-accent: #0088cc; }
+        body.light {
+            --ui-bg: #f0f2f5;
+            --ui-card: #ffffff;
+            --ui-text: #1c1c1c;
+            --ui-accent: #0088cc;
+        }
+
         body { font-family: 'Manrope', sans-serif; background: var(--ui-bg); color: var(--ui-text); overflow: hidden; margin: 0; }
         #map { height: 100vh; width: 100vw; z-index: 1; }
 
-        .tg-card { background: var(--ui-card); border-radius: 20px; box-shadow: 0 8px 30px rgba(0,0,0,0.3); border: 1px solid rgba(128,128,128,0.1); }
+        .tg-card {
+            background: var(--ui-card);
+            border-radius: 20px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+            border: 1px solid rgba(128,128,128,0.1);
+        }
 
         #compassWidget {
-            position: fixed; bottom: 24px; left: 10px; right: 10px; margin: auto; max-width: 360px;
-            z-index: 1000; display: none; opacity: 0; transition: opacity 0.3s;
+            position: fixed;
+            bottom: 24px;
+            left: 10px;
+            right: 10px;
+            margin-left: auto;
+            margin-right: auto;
+            max-width: 360px;
+            z-index: 1000;
+            display: none;
+            opacity: 0;
+            transition: opacity 0.3s;
         }
-        #compassWidget.visible { display: flex; opacity: 1; }
+        #compassWidget.visible {
+            display: flex;
+            opacity: 1;
+        }
 
         .compass-circle {
-            width: 100px; height: 100px; border-radius: 50%; position: relative;
-            background: var(--ui-bg); border: 3px solid var(--ui-accent); flex-shrink: 0; overflow: hidden;
+            width: 100px; height: 100px;
+            border-radius: 50%;
+            position: relative;
+            background: var(--ui-bg);
+            border: 3px solid var(--ui-accent);
+            flex-shrink: 0;
+            overflow: hidden;
         }
 
+        /* Диск с делениями, который крутится за телефоном */
         .compass-disk {
-            position: absolute; width: 100%; height: 100%;
+            position: absolute;
+            width: 100%; height: 100%;
             transform: rotate(calc(-1deg * var(--heading)));
             transition: transform 0.1s linear;
         }
 
+        /* Стрелка, которая указывает на вышку (угол bearing) */
+        /* Она находится ВНУТРИ диска, чтобы учитывать поворот телефона */
         .needle {
-            position: absolute; top: 50%; left: 50%; width: 4px; height: 70px;
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 4px; height: 70px;
             margin-left: -2px; margin-top: -35px;
             transform: rotate(calc(var(--bearing) * 1deg));
             z-index: 10;
         }
         .needle::after {
-            content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
-            border-left: 7px solid transparent; border-right: 7px solid transparent; border-bottom: 20px solid #ff3b30;
+            content: '';
+            position: absolute;
+            top: 0; left: 50%; transform: translateX(-50%);
+            border-left: 7px solid transparent;
+            border-right: 7px solid transparent;
+            border-bottom: 20px solid #ff3b30;
         }
 
-        .controls-stack { position: fixed; bottom: 30px; right: 16px; z-index: 1000; display: flex; flex-direction: column; gap: 12px; }
-        .side-btn { width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; font-size: 24px; border-radius: 18px; cursor: pointer; }
+        .controls-stack {
+            position: fixed;
+            bottom: 30px;
+            right: 16px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .side-btn { 
+            width: 56px; height: 56px; 
+            display: flex; align-items: center; justify-content: center; 
+            font-size: 24px; border-radius: 18px;
+        }
 
         .ios-toggle { position: relative; display: inline-block; width: 40px; height: 22px; }
         .ios-toggle input { opacity: 0; width: 0; height: 0; }
@@ -65,7 +116,10 @@
         input:checked + .slider { background-color: var(--ui-accent); }
         input:checked + .slider:before { transform: translateX(18px); }
 
-        .map-prev { border: 3px solid transparent; border-radius: 14px; overflow: hidden; cursor: pointer; position: relative; height: 70px; background: #242f3d; }
+        .map-prev { 
+            border: 3px solid transparent; border-radius: 14px; 
+            overflow: hidden; cursor: pointer; position: relative; height: 70px; background: #242f3d;
+        }
         .map-prev.active { border-color: var(--ui-accent); }
         .bg-scheme { background: repeating-conic-gradient(#555 0% 25%, #444 0% 50%) 50% / 20px 20px; opacity: 0.3; width: 100%; height: 100%; }
         .bg-sat { background: #1a2a3a; width: 100%; height: 100%; }
@@ -84,7 +138,7 @@
         <div class="tg-card flex items-center p-1 gap-2 overflow-hidden">
             <button onclick="playTap(); locate()" class="p-2 bg-gray-500/10 rounded-lg">📍</button>
             <input id="searchInput" type="text" placeholder="Где ваша антенна?" class="bg-transparent flex-1 outline-none text-sm font-medium">
-            <button onclick="playTap(); doSearch()" class="p-2 bg-[var(--ui-accent)] text-white rounded-lg px-4">🔍</button>
+            <button onclick="playTap(); doSearch()" class="p-2 bg-[var(--ui-accent)] text-white rounded-lg">🔍</button>
         </div>
         <div id="results" class="hidden tg-card mt-1 max-h-48 overflow-y-auto"></div>
     </div>
@@ -117,16 +171,26 @@
     <div id="layerMenu" class="hidden fixed bottom-48 right-4 z-[2000] tg-card p-4 w-64">
         <div class="text-[10px] font-black uppercase opacity-40 mb-3 tracking-widest">Тип карты</div>
         <div class="grid grid-cols-2 gap-3 mb-4">
-            <div onclick="playTap(); setMap('light')" id="m-light" class="map-prev active"><div class="bg-scheme"></div><div class="map-label"><span>СХЕМА</span></div></div>
-            <div onclick="playTap(); setMap('sat')" id="m-sat" class="map-prev"><div class="bg-sat"></div><div class="map-label"><span>СПУТНИК</span></div></div>
+            <div onclick="playTap(); setMap('light')" id="m-light" class="map-prev active">
+                <div class="bg-scheme"></div>
+                <div class="map-label"><span class="text-lg">🏙</span><span>СХЕМА</span></div>
+            </div>
+            <div onclick="playTap(); setMap('sat')" id="m-sat" class="map-prev">
+                <div class="bg-sat"></div>
+                <div class="map-label"><span class="text-lg">🛰</span><span>СПУТНИК</span></div>
+            </div>
         </div>
         <div class="flex items-center justify-between pt-2 border-t border-gray-500/10">
-            <span class="text-[11px] font-bold">Тёмная тема меню</span>
-            <label class="ios-toggle"><input type="checkbox" onchange="playTap(); toggleUI()"><span class="slider"></span></label>
+            <span class="text-[11px] font-bold">Тёмная схема</span>
+            <label class="ios-toggle"><input type="checkbox" id="darkCheck" onchange="playTap(); toggleDarkMap()"><span class="slider"></span></label>
         </div>
     </div>
 
     <div id="settingsMenu" class="hidden fixed top-20 right-4 z-[2000] tg-card p-4 w-60">
+        <div class="flex items-center justify-between mb-4">
+            <span class="text-[11px] font-bold">Светлая тема меню</span>
+            <label class="ios-toggle"><input type="checkbox" onchange="playTap(); toggleUI()"><span class="slider"></span></label>
+        </div>
         <button onclick="playTap(); copyLink()" class="w-full py-2 bg-[var(--ui-accent)] text-white rounded-lg text-[11px] font-bold">КОПИРОВАТЬ ДАННЫЕ</button>
     </div>
 
@@ -141,23 +205,32 @@
             if (audioCtx.state === 'suspended') audioCtx.resume();
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
+            osc.type = 'sine';
             osc.frequency.setValueAtTime(440, audioCtx.currentTime);
             osc.frequency.exponentialRampToValueAtTime(110, audioCtx.currentTime + 0.1);
             gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
-            osc.connect(gain); gain.connect(audioCtx.destination);
-            osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.1);
         }
 
         const tiles = {
             light: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'),
+            dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'),
             sat: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}')
         };
 
         function init() {
             map = L.map('map', { zoomControl: false }).setView(state.posA, 11);
             tiles.light.addTo(map);
-            markerA = L.marker(state.posA, {draggable: true}).addTo(map);
-            markerB = L.marker([0,0], {draggable: true});
+
+            const iA = L.divIcon({ html: '<div class="w-4 h-4 bg-blue-500 rounded-full border-2 border-white"></div>', className: '' });
+            const iB = L.divIcon({ html: '<div class="text-3xl">🗼</div>', className: '', iconAnchor: [15, 30] });
+
+            markerA = L.marker(state.posA, {draggable: true, icon: iA}).addTo(map);
+            markerB = L.marker([0,0], {draggable: true, icon: iB});
             line = L.polyline([], {color: '#2ea6ff', weight: 3, dashArray: '8, 12'}).addTo(map);
 
             markerA.on('drag', sync); 
@@ -168,19 +241,23 @@
                 sync();
             });
 
-            // Авто-подписка на датчики, если разрешение уже есть
+            // Настройка датчика ориентации
             if (window.DeviceOrientationEvent) {
                 window.addEventListener('deviceorientationabsolute', handleCompass, true);
                 window.addEventListener('deviceorientation', handleCompass, true);
             }
+
             locate();
         }
 
         function handleCompass(e) {
-            let heading = e.webkitCompassHeading || (360 - e.alpha);
-            if (heading !== undefined) {
-                document.documentElement.style.setProperty('--heading', heading);
-            }
+            let heading = e.webkitCompassHeading || e.alpha;
+            if (heading === undefined) return;
+            
+            // Если используем alpha (Android), нужно инвертировать
+            if (!e.webkitCompassHeading) heading = 360 - heading;
+
+            document.documentElement.style.setProperty('--heading', heading);
         }
 
         function sync() {
@@ -190,17 +267,24 @@
                 const d = map.distance(pA, pB);
                 document.getElementById('distText').innerText = d > 1000 ? (d/1000).toFixed(1)+' км' : Math.round(d)+' м';
                 line.setLatLngs([pA, pB]);
+                
                 const b = calcBearing(pA.lat, pA.lng, pB.lat, pB.lng);
                 document.documentElement.style.setProperty('--bearing', b);
                 document.getElementById('azimuthText').innerText = `Азимут: ${Math.round(b)}°`;
+                
                 if(!state.compassVisible) manualToggleCompass();
             }
         }
 
         function manualToggleCompass() {
             state.compassVisible = !state.compassVisible;
-            document.getElementById('compassWidget').classList.toggle('visible', state.compassVisible);
-            if (state.compassVisible) askSensor();
+            const widget = document.getElementById('compassWidget');
+            if (state.compassVisible) {
+                widget.classList.add('visible');
+                askSensor(); // Запрашиваем доступ при открытии
+            } else {
+                widget.classList.remove('visible');
+            }
         }
 
         function calcBearing(lat1, lon1, lat2, lon2) {
@@ -211,10 +295,11 @@
 
         async function doSearch() {
             const q = document.getElementById('searchInput').value;
+            const rBox = document.getElementById('results');
+            if(q.length < 2) return;
+            rBox.classList.remove('hidden');
             const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${q}&limit=5`);
             const data = await r.json();
-            const rBox = document.getElementById('results');
-            rBox.classList.remove('hidden');
             rBox.innerHTML = data.map(i => `<div class="p-3 border-b border-gray-500/10 text-xs" onclick="select(${i.lat},${i.lon})">${i.display_name}</div>`).join('');
         }
 
@@ -231,32 +316,45 @@
             state.mode = m;
             document.getElementById('btnA').className = m === 'A' ? "flex-1 py-2 rounded-xl font-bold text-[11px] uppercase bg-[var(--ui-accent)] text-white" : "flex-1 py-2 rounded-xl font-bold text-[11px] uppercase text-gray-400";
             document.getElementById('btnB').className = m === 'B' ? "flex-1 py-2 rounded-xl font-bold text-[11px] uppercase bg-[var(--ui-accent)] text-white" : "flex-1 py-2 rounded-xl font-bold text-[11px] uppercase text-gray-400";
+            document.getElementById('searchInput').placeholder = m === 'A' ? "Где ваша антенна?" : "Где стоит вышка?";
         }
 
         function setMap(t) {
-            Object.values(tiles).forEach(l => map.removeLayer(l));
-            tiles[t].addTo(map);
+            state.map = t; state.darkMap = false;
+            document.getElementById('darkCheck').checked = false;
             document.querySelectorAll('.map-prev').forEach(b => b.classList.remove('active'));
             document.getElementById('m-'+t).classList.add('active');
+            apply();
         }
 
+        function toggleDarkMap() { state.darkMap = document.getElementById('darkCheck').checked; apply(); }
+        function apply() { Object.values(tiles).forEach(t => map.removeLayer(t)); if(state.darkMap) tiles.dark.addTo(map); else tiles[state.map].addTo(map); }
         function toggleUI() { document.body.classList.toggle('light'); }
         function toggleMenu(id) { 
-            const m = document.getElementById(id);
-            const isH = m.classList.contains('hidden');
+            const menu = document.getElementById(id);
+            const isHidden = menu.classList.contains('hidden');
             document.getElementById('layerMenu').classList.add('hidden');
             document.getElementById('settingsMenu').classList.add('hidden');
-            if(isH) m.classList.remove('hidden');
+            if(isHidden) menu.classList.remove('hidden');
         }
         function locate() { map.locate({setView: true, maxZoom: 16}); map.on('locationfound', e => { markerA.setLatLng(e.latlng); sync(); }); }
         
         function askSensor() {
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                DeviceOrientationEvent.requestPermission().then(s => { if(s === 'granted') window.addEventListener('deviceorientation', handleCompass); });
+                DeviceOrientationEvent.requestPermission()
+                    .then(permissionState => {
+                        if (permissionState === 'granted') {
+                            window.addEventListener('deviceorientation', handleCompass, true);
+                        }
+                    })
+                    .catch(console.error);
             }
         }
 
-        function copyLink() { navigator.clipboard.writeText(window.location.href); alert("Ссылка скопирована!"); }
+        function copyLink() {
+            const u = `${window.location.origin}${window.location.pathname}?ax=${markerA.getLatLng().lat}&ay=${markerA.getLatLng().lng}`;
+            navigator.clipboard.writeText(u); alert("Скопировано!");
+        }
 
         window.onload = init;
     </script>
