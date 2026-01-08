@@ -1,232 +1,379 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Antenna Compass</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Азимут | Настройка Антенны</title>
 
-<script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap');
 
-<style>
-html,body,#map{height:100%;margin:0}
-.glass{backdrop-filter:blur(10px);background:rgba(255,255,255,.85)}
-.dark .glass{background:rgba(17,24,39,.9)}
-</style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+        }
+
+        #map {
+            height: 100vh;
+            width: 100vw;
+            z-index: 1;
+        }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .dark .glass {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        /* Компас */
+        .compass-container {
+            width: 120px;
+            height: 120px;
+            border: 4px solid #3b82f6;
+            border-radius: 50%;
+            position: relative;
+            transition: transform 0.3s ease-out;
+        }
+
+        .compass-arrow {
+            width: 0;
+            height: 0;
+            border-left: 15px solid transparent;
+            border-right: 15px solid transparent;
+            border-bottom: 40px solid #ef4444;
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .mode-active {
+            ring: 4px;
+            ring-color: #3b82f6;
+            transform: scale(1.05);
+        }
+
+        /* Скрытие элементов Leaflet */
+        .leaflet-control-attribution { font-size: 8px !important; }
+        
+        /* Анимация пульсации для точки А */
+        .pulse-icon {
+            background: #3b82f6;
+            border-radius: 50%;
+            box-shadow: 0 0 0 rgba(59, 130, 246, 0.4);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+            70% { box-shadow: 0 0 0 15px rgba(59, 130, 246, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+        }
+    </style>
 </head>
+<body class="light">
 
-<body class="transition-colors duration-300">
+    <div class="fixed top-4 left-4 right-4 md:left-10 md:right-auto md:w-96 z-[1000] flex flex-col gap-3">
+        
+        <div class="glass p-2 rounded-2xl shadow-xl flex gap-2">
+            <button id="btnModeA" onclick="setMode('A')" class="flex-1 py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all font-semibold bg-blue-500 text-white shadow-lg">
+                <span class="text-xl">🔵</span> Я (A)
+            </button>
+            <button id="btnModeB" onclick="setMode('B')" class="flex-1 py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all font-semibold bg-gray-100 dark:bg-slate-700">
+                <span class="text-xl">🔴</span> Вышка (B)
+            </button>
+        </div>
 
-<div id="map"></div>
-
-<!-- CONTROL PANEL -->
-<div class="absolute top-4 left-4 z-[1000] w-80 space-y-3">
-  <div class="glass rounded-xl p-4 shadow-lg space-y-3">
-    <h1 class="font-bold text-lg">📡 Antenna Compass</h1>
-
-    <!-- MODE -->
-    <div class="flex gap-2">
-      <button id="modeA" class="flex-1 py-2 rounded bg-blue-500 text-white">Я (A)</button>
-      <button id="modeB" class="flex-1 py-2 rounded bg-gray-200">Вышка (B)</button>
+        <div class="glass p-3 rounded-2xl shadow-xl">
+            <div class="relative">
+                <input id="searchInput" type="text" placeholder="Поиск адреса или вышек..." 
+                       class="w-full p-3 rounded-xl bg-white/50 dark:bg-slate-800 outline-none focus:ring-2 ring-blue-500 transition-all">
+                <button onclick="handleSearch()" class="absolute right-2 top-2 bg-blue-500 text-white p-2 rounded-lg hover:bg-blue-600">Найти</button>
+            </div>
+            <div id="searchResults" class="hidden mt-3 max-h-60 overflow-y-auto divide-y divide-gray-200 dark:divide-slate-700"></div>
+        </div>
     </div>
 
-    <p id="modeHint" class="text-sm text-gray-600">
-      Выберите своё местоположение
-    </p>
+    <div class="fixed bottom-8 left-1/2 -translate-x-1/2 z-[1000] w-[90%] md:w-auto flex flex-col md:flex-row items-center gap-6 pointer-events-none">
+        <div class="glass p-6 rounded-3xl shadow-2xl pointer-events-auto flex items-center gap-6 min-w-[300px]">
+            <div class="flex flex-col items-center gap-2">
+                <div id="compass" class="compass-container">
+                    <div class="compass-arrow"></div>
+                </div>
+                <span class="text-[10px] uppercase tracking-widest opacity-60">Направление</span>
+            </div>
 
-    <!-- SEARCH -->
-    <input id="search" placeholder="Поиск…" class="w-full p-2 rounded border"/>
-
-    <!-- BUTTONS -->
-    <div class="flex gap-2">
-      <button id="locate" class="flex-1 py-2 bg-green-500 text-white rounded">
-        Моё местоположение
-      </button>
-      <button id="theme" class="px-3 py-2 bg-gray-300 rounded">🌙</button>
+            <div class="flex flex-col justify-center">
+                <p id="statusText" class="text-sm font-medium text-blue-500 mb-1">Выберите своё местоположение</p>
+                <h2 id="distanceText" class="text-3xl font-bold tracking-tighter">0 м</h2>
+                <p class="text-xs opacity-50 mt-1">Расстояние до объекта</p>
+                
+                <div class="mt-4 flex gap-2">
+                    <button onclick="copyPermalink()" class="text-xs bg-slate-200 dark:bg-slate-700 px-3 py-1.5 rounded-full hover:bg-blue-100 transition-colors">🔗 Поделиться</button>
+                    <button onclick="toggleTheme()" class="text-xs bg-slate-200 dark:bg-slate-700 px-3 py-1.5 rounded-full">🌓 Тема</button>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <!-- MAP TYPE -->
-    <select id="mapStyle" class="w-full p-2 rounded border">
-      <option value="light">Светлая карта</option>
-      <option value="dark">Тёмная карта</option>
-    </select>
-
-    <button id="copy" class="w-full py-2 bg-gray-800 text-white rounded">
-      Скопировать ссылку
-    </button>
-  </div>
-</div>
-
-<!-- COMPASS -->
-<div class="absolute bottom-6 right-6 z-[1000]">
-  <div class="glass rounded-full w-28 h-28 flex items-center justify-center shadow-xl">
-    <div class="relative w-20 h-20 rounded-full border-2 border-gray-400 flex items-center justify-center">
-      <div id="arrow" class="absolute w-1 h-8 bg-red-500 origin-bottom"></div>
-      <span class="absolute top-1 text-xs font-bold">N</span>
+    <div class="fixed right-4 top-1/2 -translate-y-1/2 z-[1000] flex flex-col gap-2">
+        <button onclick="locateMe()" class="glass p-3 rounded-full shadow-lg hover:bg-white transition-all text-xl" title="Где я?">📍</button>
+        <button onclick="toggleSettings()" class="glass p-3 rounded-full shadow-lg hover:bg-white transition-all text-xl" title="Слои">🗺</button>
     </div>
-  </div>
-</div>
 
-<!-- DISTANCE -->
-<div class="absolute bottom-6 left-4 z-[1000] glass rounded-lg px-4 py-2 shadow">
-  <span id="distance">Расстояние: —</span>
-</div>
+    <div id="settingsPanel" class="hidden fixed inset-0 z-[2000] bg-black/40 flex items-center justify-center p-4">
+        <div class="glass p-6 rounded-3xl w-full max-w-sm">
+            <h3 class="text-xl font-bold mb-4">Настройки карты</h3>
+            <div class="flex flex-col gap-3">
+                <button onclick="setMapType('light')" class="p-3 text-left rounded-xl bg-white/50 hover:bg-blue-50 dark:bg-slate-800">🗺 Стандартная</button>
+                <button onclick="setMapType('dark')" class="p-3 text-left rounded-xl bg-white/50 hover:bg-blue-50 dark:bg-slate-800">🌙 Темная (Схема)</button>
+                <button onclick="setMapType('sat')" class="p-3 text-left rounded-xl bg-white/50 hover:bg-blue-50 dark:bg-slate-800">🛰 Спутник</button>
+            </div>
+            <button onclick="toggleSettings()" class="mt-6 w-full py-3 bg-blue-500 text-white rounded-xl font-bold">Закрыть</button>
+        </div>
+    </div>
 
-<script>
-/* ---------- MAP ---------- */
-const map = L.map('map',{zoomControl:false});
-L.control.zoom({position:'bottomright'}).addTo(map);
+    <div id="map"></div>
 
-const tiles = {
-  light: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}),
-  dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:19})
-};
-tiles.light.addTo(map);
+    <script>
+        // Состояние приложения
+        let state = {
+            mode: 'A', // A или B
+            posA: [39.8283, -98.5795],
+            posB: null,
+            zoom: 5,
+            theme: 'light',
+            mapType: 'light'
+        };
 
-let currentTiles = 'light';
+        let map, markerA, markerB, polyline;
+        
+        // Слои карты
+        const layers = {
+            light: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OSM' }),
+            dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '© CartoDB' }),
+            sat: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: '© Esri' })
+        };
 
-/* ---------- STATE ---------- */
-let mode = 'A';
+        // Инициализация
+        function init() {
+            parseUrl();
+            
+            map = L.map('map', {
+                zoomControl: false,
+                attributionControl: true
+            }).setView(state.posA, state.zoom);
 
-let A = L.marker([39.8283,-98.5795],{draggable:true}).addTo(map);
-let B = L.marker([39.83,-98.57],{draggable:true}).addTo(map);
-let line = L.polyline([],{color:'#3b82f6',weight:3}).addTo(map);
+            layers[state.mapType].addTo(map);
+            if (state.theme === 'dark') document.body.classList.add('dark');
 
-/* ---------- GEO ---------- */
-function distance(a,b){
-  const R=6371e3;
-  const φ1=a.lat*Math.PI/180, φ2=b.lat*Math.PI/180;
-  const dφ=(b.lat-a.lat)*Math.PI/180;
-  const dλ=(b.lng-a.lng)*Math.PI/180;
-  const x=Math.sin(dφ/2)**2+
-          Math.cos(φ1)*Math.cos(φ2)*Math.sin(dλ/2)**2;
-  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
-}
+            // Иконки
+            const iconA = L.divIcon({ className: 'pulse-icon', iconSize: [20, 20] });
+            const iconB = L.divIcon({ 
+                html: '<div style="font-size:30px; transform:translate(-10px, -30px)">🗼</div>', 
+                className: 'dummy' 
+            });
 
-function bearing(a,b){
-  const φ1=a.lat*Math.PI/180, φ2=b.lat*Math.PI/180;
-  const dλ=(b.lng-a.lng)*Math.PI/180;
-  const y=Math.sin(dλ)*Math.cos(φ2);
-  const x=Math.cos(φ1)*Math.sin(φ2)-
-          Math.sin(φ1)*Math.cos(φ2)*Math.cos(dλ);
-  return Math.atan2(y,x)*180/Math.PI;
-}
+            markerA = L.marker(state.posA, {draggable: true, icon: iconA}).addTo(map);
+            markerB = L.marker(state.posB || [0,0], {draggable: true, icon: iconB});
+            
+            if (state.posB) markerB.addTo(map);
 
-function update(){
-  const a=A.getLatLng(), b=B.getLatLng();
-  line.setLatLngs([a,b]);
+            polyline = L.polyline([], {color: '#3b82f6', weight: 3, dashArray: '10, 10'}).addTo(map);
 
-  const d=distance(a,b);
-  document.getElementById('distance').innerText=
-    d<1000?`Расстояние: ${Math.round(d)} м`
-          :`Расстояние: ${(d/1000).toFixed(2)} км`;
+            // События
+            map.on('click', onMapClick);
+            markerA.on('drag', updateCalculations);
+            markerB.on('drag', updateCalculations);
+            
+            updateCalculations();
+            
+            // Если нет данных в URL, пытаемся найти пользователя
+            if (window.location.search === "") {
+                locateMe();
+            }
+        }
 
-  const rot=bearing(a,b);
-  document.getElementById('arrow').style.transform=`rotate(${rot}deg)`;
-  updateURL();
-}
+        function setMode(m) {
+            state.mode = m;
+            document.getElementById('btnModeA').className = m === 'A' ? 'flex-1 py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all font-semibold bg-blue-500 text-white shadow-lg' : 'flex-1 py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all font-semibold bg-gray-100 dark:bg-slate-700 text-gray-500';
+            document.getElementById('btnModeB').className = m === 'B' ? 'flex-1 py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all font-semibold bg-red-500 text-white shadow-lg' : 'flex-1 py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all font-semibold bg-gray-100 dark:bg-slate-700 text-gray-500';
+            
+            document.getElementById('statusText').innerText = m === 'A' ? 'Выберите своё местоположение' : 'Выберите вышку или антенну';
+        }
 
-A.on('drag',update);
-B.on('drag',update);
+        function onMapClick(e) {
+            if (state.mode === 'A') {
+                state.posA = [e.latlng.lat, e.latlng.lng];
+                markerA.setLatLng(state.posA);
+            } else {
+                state.posB = [e.latlng.lat, e.latlng.lng];
+                markerB.setLatLng(state.posB).addTo(map);
+            }
+            updateCalculations();
+            updateUrl();
+        }
 
-/* ---------- MODES ---------- */
-modeA.onclick=()=>{
-  mode='A';
-  modeA.className="flex-1 py-2 rounded bg-blue-500 text-white";
-  modeB.className="flex-1 py-2 rounded bg-gray-200";
-  modeHint.innerText="Выберите своё местоположение";
-};
-modeB.onclick=()=>{
-  mode='B';
-  modeB.className="flex-1 py-2 rounded bg-red-500 text-white";
-  modeA.className="flex-1 py-2 rounded bg-gray-200";
-  modeHint.innerText="Выберите вышку или антенну";
-};
+        function updateCalculations() {
+            const pA = markerA.getLatLng();
+            const pB = markerB.getLatLng();
 
-/* ---------- MAP CLICK ---------- */
-map.on('click',e=>{
-  if(mode==='A') A.setLatLng(e.latlng);
-  else B.setLatLng(e.latlng);
-  update();
-});
+            if (state.posB) {
+                // Расстояние (Haversine)
+                const dist = map.distance(pA, pB);
+                document.getElementById('distanceText').innerText = dist > 1000 
+                    ? (dist / 1000).toFixed(2) + ' км' 
+                    : Math.round(dist) + ' м';
 
-/* ---------- SEARCH ---------- */
-search.onkeydown=async e=>{
-  if(e.key!=='Enter')return;
-  if(mode==='A'){
-    const r=await fetch(
-      `https://nominatim.openstreetmap.org/search?format=json&q=${search.value}`
-    ).then(r=>r.json());
-    if(r[0]){
-      A.setLatLng([r[0].lat,r[0].lon]);
-      map.setView([r[0].lat,r[0].lon],15);
-      update();
-    }
-  }else{
-    const q=`[out:json];
-      node(around:20000,${A.getLatLng().lat},${A.getLatLng().lng})
-      [man_made~"tower|mast|antenna"];
-      out;`;
-    const r=await fetch(
-      'https://overpass-api.de/api/interpreter',
-      {method:'POST',body:q}
-    ).then(r=>r.json());
-    if(r.elements[0]){
-      B.setLatLng([r.elements[0].lat,r.elements[0].lon]);
-      map.setView([r.elements[0].lat,r.elements[0].lon],15);
-      update();
-    }else alert('Вышки не найдены');
-  }
-};
+                // Линия
+                polyline.setLatLngs([pA, pB]);
 
-/* ---------- GEOLOCATION ---------- */
-locate.onclick=()=>{
-  map.locate({setView:true});
-  map.once('locationfound',e=>{
-    A.setLatLng(e.latlng);
-    update();
-  });
-};
+                // Угол (Bearing) для компаса
+                const angle = calculateBearing(pA.lat, pA.lng, pB.lat, pB.lng);
+                document.getElementById('compass').style.transform = `rotate(${angle}deg)`;
+            }
+        }
 
-/* ---------- THEME ---------- */
-theme.onclick=()=>{
-  document.body.classList.toggle('dark');
-};
+        function calculateBearing(lat1, lon1, lat2, lon2) {
+            const φ1 = lat1 * Math.PI / 180;
+            const φ2 = lat2 * Math.PI / 180;
+            const λ1 = lon1 * Math.PI / 180;
+            const λ2 = lon2 * Math.PI / 180;
+            const y = Math.sin(λ2 - λ1) * Math.cos(φ2);
+            const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(λ2 - λ1);
+            return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+        }
 
-mapStyle.onchange=e=>{
-  map.removeLayer(tiles[currentTiles]);
-  currentTiles=e.target.value;
-  tiles[currentTiles].addTo(map);
-};
+        async function handleSearch() {
+            const q = document.getElementById('searchInput').value;
+            if (q.length < 3) return;
 
-/* ---------- PERMALINK ---------- */
-function updateURL(){
-  const a=A.getLatLng(), b=B.getLatLng();
-  const p=new URLSearchParams({
-    aLat:a.lat,aLng:a.lng,
-    bLat:b.lat,bLng:b.lng,
-    z:map.getZoom(),
-    map:currentTiles
-  });
-  history.replaceState({},'',`?${p}`);
-}
+            const resultsBox = document.getElementById('searchResults');
+            resultsBox.innerHTML = '<p class="p-3 text-sm">Поиск...</p>';
+            resultsBox.classList.remove('hidden');
 
-(function load(){
-  const p=new URLSearchParams(location.search);
-  if(p.get('aLat')){
-    A.setLatLng([+p.get('aLat'),+p.get('aLng')]);
-    B.setLatLng([+p.get('bLat'),+p.get('bLng')]);
-    map.setView(A.getLatLng(),+p.get('z'));
-    if(p.get('map')) mapStyle.value=p.get('map'),mapStyle.onchange({target:mapStyle});
-  }else{
-    map.setView(A.getLatLng(),5);
-  }
-  update();
-})();
+            if (state.mode === 'A') {
+                // Поиск адреса (Nominatim)
+                const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${q}`);
+                const data = await res.json();
+                renderResults(data, 'address');
+            } else {
+                // Поиск вышек (Overpass)
+                const center = map.getCenter();
+                const query = `[out:json];
+                    (
+                      node["man_made"="tower"](around:20000,${center.lat},${center.lng});
+                      node["man_made"="mast"](around:20000,${center.lat},${center.lng});
+                      node["communication_tower"](around:20000,${center.lat},${center.lng});
+                      node["tower:type"="communication"](around:20000,${center.lat},${center.lng});
+                    );
+                    out body;`;
+                const res = await fetch('https://overpass-api.de/api/interpreter', {
+                    method: 'POST',
+                    body: query
+                });
+                const data = await res.json();
+                renderResults(data.elements, 'tower');
+            }
+        }
 
-copy.onclick=()=>navigator.clipboard.writeText(location.href);
-</script>
+        function renderResults(items, type) {
+            const resultsBox = document.getElementById('searchResults');
+            if (!items || items.length === 0) {
+                resultsBox.innerHTML = '<p class="p-3 text-sm">Ничего не найдено рядом</p>';
+                return;
+            }
+
+            resultsBox.innerHTML = items.slice(0, 5).map(item => `
+                <div onclick="selectResult(${item.lat}, ${item.lon})" class="p-3 hover:bg-blue-50 dark:hover:bg-slate-700 cursor-pointer text-sm">
+                    ${item.display_name || item.tags?.name || (type === 'tower' ? 'Вышка связи' : 'Точка на карте')}
+                </div>
+            `).join('');
+        }
+
+        function selectResult(lat, lon) {
+            const latlng = [lat, lon];
+            if (state.mode === 'A') {
+                state.posA = latlng;
+                markerA.setLatLng(latlng);
+            } else {
+                state.posB = latlng;
+                markerB.setLatLng(latlng).addTo(map);
+            }
+            map.flyTo(latlng, 15);
+            updateCalculations();
+            updateUrl();
+            document.getElementById('searchResults').classList.add('hidden');
+        }
+
+        function locateMe() {
+            map.locate({setView: true, maxZoom: 16});
+            map.on('locationfound', (e) => {
+                state.posA = [e.latlng.lat, e.latlng.lng];
+                markerA.setLatLng(state.posA);
+                updateCalculations();
+            });
+        }
+
+        function toggleTheme() {
+            document.body.classList.toggle('dark');
+            state.theme = document.body.classList.contains('dark') ? 'dark' : 'light';
+            setMapType(state.theme === 'dark' ? 'dark' : 'light');
+        }
+
+        function toggleSettings() {
+            document.getElementById('settingsPanel').classList.toggle('hidden');
+        }
+
+        function setMapType(type) {
+            Object.values(layers).forEach(layer => map.removeLayer(layer));
+            layers[type].addTo(map);
+            state.mapType = type;
+            toggleSettings();
+            updateUrl();
+        }
+
+        function updateUrl() {
+            const params = new URLSearchParams({
+                ax: markerA.getLatLng().lat.toFixed(6),
+                ay: markerA.getLatLng().lng.toFixed(6),
+                bx: state.posB ? markerB.getLatLng().lat.toFixed(6) : '',
+                by: state.posB ? markerB.getLatLng().lng.toFixed(6) : '',
+                z: map.getZoom(),
+                t: state.theme,
+                m: state.mapType
+            });
+            window.history.replaceState({}, '', '?' + params.toString());
+        }
+
+        function parseUrl() {
+            const p = new URLSearchParams(window.location.search);
+            if (p.has('ax')) state.posA = [parseFloat(p.get('ax')), parseFloat(p.get('ay'))];
+            if (p.has('bx')) state.posB = [parseFloat(p.get('bx')), parseFloat(p.get('by'))];
+            if (p.has('z')) state.zoom = parseInt(p.get('z'));
+            if (p.has('t')) state.theme = p.get('t');
+            if (p.has('m')) state.mapType = p.get('m');
+        }
+
+        function copyPermalink() {
+            updateUrl();
+            navigator.clipboard.writeText(window.location.href);
+            alert('Ссылка скопирована!');
+        }
+
+        window.onload = init;
+    </script>
 </body>
 </html>
