@@ -3,374 +3,315 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Азимут | Настройка Антенны</title>
+    <title>Azimuth Master Pro</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
-    
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&display=swap');
 
-        body {
-            font-family: 'Inter', sans-serif;
+        :root {
+            --ui-bg: #17212b;
+            --ui-card: #242f3d;
+            --ui-text: #ffffff;
+            --ui-accent: #2ea6ff;
+            --bearing: 0deg;
+            --heading: 0deg;
+        }
+
+        body.light {
+            --ui-bg: #f0f2f5;
+            --ui-card: #ffffff;
+            --ui-text: #1c1c1c;
+            --ui-accent: #0088cc;
+        }
+
+        body { font-family: 'Manrope', sans-serif; background: var(--ui-bg); color: var(--ui-text); overflow: hidden; transition: 0.3s; }
+        #map { height: 100vh; width: 100vw; z-index: 1; }
+
+        .tg-card {
+            background: var(--ui-card);
+            border-radius: 20px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.25);
+            border: 1px solid rgba(128,128,128,0.1);
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s;
+        }
+
+        /* Виджет компаса */
+        #compassWidget {
+            transform: translateY(150%);
+            opacity: 0;
+            pointer-events: none;
+        }
+        #compassWidget.visible {
+            transform: translateY(0);
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .compass-wrap {
+            width: 110px; height: 110px;
+            border-radius: 50%;
+            position: relative;
+            background: var(--ui-bg);
+            border: 2px solid var(--ui-accent);
             overflow: hidden;
         }
 
-        #map {
-            height: 100vh;
-            width: 100vw;
-            z-index: 1;
+        .compass-disk {
+            position: absolute;
+            width: 100%; height: 100%;
+            /* Вращение диска телефона */
+            transform: rotate(calc(-1 * var(--heading)));
+            transition: transform 0.05s linear;
         }
 
-        .glass {
-            background: rgba(255, 255, 255, 0.8);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-        }
-
-        .dark .glass {
-            background: rgba(30, 41, 59, 0.8);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            color: white;
-        }
-
-        /* Компас */
-        .compass-container {
-            width: 120px;
-            height: 120px;
-            border: 4px solid #3b82f6;
-            border-radius: 50%;
-            position: relative;
+        .needle {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 4px; height: 70px;
+            margin-left: -2px; margin-top: -35px;
+            /* Направление на вышку */
+            transform: rotate(var(--bearing));
             transition: transform 0.3s ease-out;
         }
-
-        .compass-arrow {
-            width: 0;
-            height: 0;
-            border-left: 15px solid transparent;
-            border-right: 15px solid transparent;
-            border-bottom: 40px solid #ef4444;
+        .needle::after {
+            content: '';
             position: absolute;
-            top: 10px;
-            left: 50%;
-            transform: translateX(-50%);
+            top: 0; left: 50%; transform: translateX(-50%);
+            border-left: 7px solid transparent;
+            border-right: 7px solid transparent;
+            border-bottom: 20px solid #ff3b30;
+            filter: drop-shadow(0 0 5px #ff3b30);
         }
 
-        .mode-active {
-            ring: 4px;
-            ring-color: #3b82f6;
-            transform: scale(1.05);
-        }
+        /* Тумблеры и кнопки */
+        .ios-toggle { position: relative; display: inline-block; width: 42px; height: 24px; }
+        .ios-toggle input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #4a5568; transition: .4s; border-radius: 24px; }
+        .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--ui-accent); }
+        input:checked + .slider:before { transform: translateX(18px); }
 
-        /* Скрытие элементов Leaflet */
-        .leaflet-control-attribution { font-size: 8px !important; }
-        
-        /* Анимация пульсации для точки А */
-        .pulse-icon {
-            background: #3b82f6;
-            border-radius: 50%;
-            box-shadow: 0 0 0 rgba(59, 130, 246, 0.4);
-            animation: pulse 2s infinite;
-        }
+        .map-preview { border: 3px solid transparent; border-radius: 12px; overflow: hidden; transition: 0.2s; cursor: pointer; }
+        .map-preview.active { border-color: var(--ui-accent); transform: scale(1.03); }
 
-        @keyframes pulse {
-            0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
-            70% { box-shadow: 0 0 0 15px rgba(59, 130, 246, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
-        }
+        .btn-mode { flex: 1; padding: 10px; border-radius: 12px; font-size: 11px; font-weight: 800; text-transform: uppercase; color: #718096; transition: 0.2s; }
+        .btn-mode.active { background: var(--ui-accent); color: white; }
+
+        .side-btn { width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; font-size: 20px; margin-bottom: 10px; cursor: pointer; }
     </style>
 </head>
-<body class="light">
+<body class="dark">
 
-    <div class="fixed top-4 left-4 right-4 md:left-10 md:right-auto md:w-96 z-[1000] flex flex-col gap-3">
-        
-        <div class="glass p-2 rounded-2xl shadow-xl flex gap-2">
-            <button id="btnModeA" onclick="setMode('A')" class="flex-1 py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all font-semibold bg-blue-500 text-white shadow-lg">
-                <span class="text-xl">🔵</span> Я (A)
-            </button>
-            <button id="btnModeB" onclick="setMode('B')" class="flex-1 py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all font-semibold bg-gray-100 dark:bg-slate-700">
-                <span class="text-xl">🔴</span> Вышка (B)
-            </button>
+    <div class="fixed top-4 left-4 right-4 z-[1000] flex flex-col gap-2 max-w-md mx-auto">
+        <div class="tg-card p-1.5 flex gap-1 items-center">
+            <button id="btnA" onclick="setMode('A')" class="btn-mode active">Моя точка</button>
+            <button id="btnB" onclick="setMode('B')" class="btn-mode">Вышка</button>
+            <div class="w-[1px] h-6 bg-gray-500/20 mx-1"></div>
+            <button onclick="toggleMenu('settingsMenu')" class="p-2 text-xl">⚙️</button>
         </div>
 
-        <div class="glass p-3 rounded-2xl shadow-xl">
-            <div class="relative">
-                <input id="searchInput" type="text" placeholder="Поиск адреса или вышек..." 
-                       class="w-full p-3 rounded-xl bg-white/50 dark:bg-slate-800 outline-none focus:ring-2 ring-blue-500 transition-all">
-                <button onclick="handleSearch()" class="absolute right-2 top-2 bg-blue-500 text-white p-2 rounded-lg hover:bg-blue-600">Найти</button>
+        <div class="tg-card flex flex-col overflow-hidden">
+            <div class="flex items-center p-2 gap-2">
+                <button onclick="locate()" class="p-2.5 hover:bg-gray-500/10 rounded-xl">📍</button>
+                <input id="searchInput" type="text" placeholder="Выберите свою точку..." class="bg-transparent flex-1 outline-none text-sm px-1 font-medium text-[var(--ui-text)]">
+                <button onclick="doSearch()" class="p-2.5 bg-[var(--ui-accent)] text-white rounded-xl shadow-md">🔍</button>
             </div>
-            <div id="searchResults" class="hidden mt-3 max-h-60 overflow-y-auto divide-y divide-gray-200 dark:divide-slate-700"></div>
+            <div id="results" class="hidden max-h-60 overflow-y-auto border-t border-gray-500/10 bg-[var(--ui-card)]"></div>
         </div>
     </div>
 
-    <div class="fixed bottom-8 left-1/2 -translate-x-1/2 z-[1000] w-[90%] md:w-auto flex flex-col md:flex-row items-center gap-6 pointer-events-none">
-        <div class="glass p-6 rounded-3xl shadow-2xl pointer-events-auto flex items-center gap-6 min-w-[300px]">
-            <div class="flex flex-col items-center gap-2">
-                <div id="compass" class="compass-container">
-                    <div class="compass-arrow"></div>
+    <div id="compassWidget" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[1000] w-[95%] max-w-sm">
+        <div class="tg-card p-5 flex items-center gap-6">
+            <div class="compass-wrap" onclick="askSensor()">
+                <div class="compass-disk">
+                    <div class="absolute top-1 left-1/2 -translate-x-1/2 text-[10px] font-black opacity-30">N</div>
+                    <div class="absolute bottom-1 left-1/2 -translate-x-1/2 text-[10px] font-black opacity-30">S</div>
+                    <div class="needle"></div>
                 </div>
-                <span class="text-[10px] uppercase tracking-widest opacity-60">Направление</span>
-            </div>
-
-            <div class="flex flex-col justify-center">
-                <p id="statusText" class="text-sm font-medium text-blue-500 mb-1">Выберите своё местоположение</p>
-                <h2 id="distanceText" class="text-3xl font-bold tracking-tighter">0 м</h2>
-                <p class="text-xs opacity-50 mt-1">Расстояние до объекта</p>
-                
-                <div class="mt-4 flex gap-2">
-                    <button onclick="copyPermalink()" class="text-xs bg-slate-200 dark:bg-slate-700 px-3 py-1.5 rounded-full hover:bg-blue-100 transition-colors">🔗 Поделиться</button>
-                    <button onclick="toggleTheme()" class="text-xs bg-slate-200 dark:bg-slate-700 px-3 py-1.5 rounded-full">🌓 Тема</button>
+                <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div class="w-2 h-2 bg-red-500 rounded-full border border-white"></div>
                 </div>
             </div>
-        </div>
-    </div>
-
-    <div class="fixed right-4 top-1/2 -translate-y-1/2 z-[1000] flex flex-col gap-2">
-        <button onclick="locateMe()" class="glass p-3 rounded-full shadow-lg hover:bg-white transition-all text-xl" title="Где я?">📍</button>
-        <button onclick="toggleSettings()" class="glass p-3 rounded-full shadow-lg hover:bg-white transition-all text-xl" title="Слои">🗺</button>
-    </div>
-
-    <div id="settingsPanel" class="hidden fixed inset-0 z-[2000] bg-black/40 flex items-center justify-center p-4">
-        <div class="glass p-6 rounded-3xl w-full max-w-sm">
-            <h3 class="text-xl font-bold mb-4">Настройки карты</h3>
-            <div class="flex flex-col gap-3">
-                <button onclick="setMapType('light')" class="p-3 text-left rounded-xl bg-white/50 hover:bg-blue-50 dark:bg-slate-800">🗺 Стандартная</button>
-                <button onclick="setMapType('dark')" class="p-3 text-left rounded-xl bg-white/50 hover:bg-blue-50 dark:bg-slate-800">🌙 Темная (Схема)</button>
-                <button onclick="setMapType('sat')" class="p-3 text-left rounded-xl bg-white/50 hover:bg-blue-50 dark:bg-slate-800">🛰 Спутник</button>
+            <div class="flex-1">
+                <div class="text-[10px] uppercase font-black text-[var(--ui-accent)] tracking-widest mb-1">До вышки</div>
+                <div id="distText" class="text-4xl font-black tracking-tighter tabular-nums">---</div>
+                <div class="text-[9px] opacity-50 mt-1">Нажми на круг для калибровки</div>
             </div>
-            <button onclick="toggleSettings()" class="mt-6 w-full py-3 bg-blue-500 text-white rounded-xl font-bold">Закрыть</button>
         </div>
+    </div>
+
+    <div class="fixed bottom-32 right-4 z-[1000] flex flex-col">
+        <button id="compassToggleBtn" onclick="manualToggleCompass()" class="tg-card side-btn hidden">🧭</button>
+        <button onclick="toggleMenu('layerMenu')" class="tg-card side-btn">🗺</button>
+    </div>
+
+    <div id="layerMenu" class="hidden fixed bottom-52 right-4 z-[2000] tg-card p-4 w-60">
+        <h4 class="text-[10px] font-bold uppercase opacity-40 mb-3 tracking-widest">Вид карты</h4>
+        <div class="grid grid-cols-2 gap-3 mb-4">
+            <div onclick="setMap('light')" id="m-light" class="map-preview active">
+                <img src="https://api.maptiler.com/maps/basic-v2/static/0,0,1/150x100.png">
+                <div class="text-[9px] font-bold p-1 text-center">СХЕМА</div>
+            </div>
+            <div onclick="setMap('sat')" id="m-sat" class="map-preview">
+                <img src="https://api.maptiler.com/maps/satellite/static/0,0,1/150x100.png">
+                <div class="text-[9px] font-bold p-1 text-center">СПУТНИК</div>
+            </div>
+        </div>
+        <div class="flex items-center justify-between pt-3 border-t border-gray-500/10">
+            <span class="text-xs font-bold">Тёмная схема</span>
+            <label class="ios-toggle"><input type="checkbox" id="darkCheck" onchange="toggleDarkMap()"><span class="slider"></span></label>
+        </div>
+    </div>
+
+    <div id="settingsMenu" class="hidden fixed top-20 right-4 z-[2000] tg-card p-4 w-64">
+        <div class="flex items-center justify-between mb-4">
+            <span class="text-xs font-bold">Светлый интерфейс</span>
+            <label class="ios-toggle"><input type="checkbox" onchange="toggleUI()"><span class="slider"></span></label>
+        </div>
+        <button onclick="copyLink()" class="w-full py-3 bg-[var(--ui-accent)] text-white rounded-xl text-xs font-bold shadow-lg">🔗 Поделиться данными</button>
     </div>
 
     <div id="map"></div>
 
     <script>
-        // Состояние приложения
-        let state = {
-            mode: 'A', // A или B
-            posA: [39.8283, -98.5795],
-            posB: null,
-            zoom: 5,
-            theme: 'light',
-            mapType: 'light'
+        let state = { mode: 'A', posA: [50.45, 30.52], posB: null, map: 'light', darkMap: false, compassVisible: false };
+        let map, markerA, markerB, line;
+
+        const tiles = {
+            light: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'),
+            dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'),
+            sat: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}')
         };
 
-        let map, markerA, markerB, polyline;
-        
-        // Слои карты
-        const layers = {
-            light: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OSM' }),
-            dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '© CartoDB' }),
-            sat: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: '© Esri' })
-        };
-
-        // Инициализация
         function init() {
-            parseUrl();
-            
-            map = L.map('map', {
-                zoomControl: false,
-                attributionControl: true
-            }).setView(state.posA, state.zoom);
+            map = L.map('map', { zoomControl: false }).setView(state.posA, 11);
+            tiles.light.addTo(map);
 
-            layers[state.mapType].addTo(map);
-            if (state.theme === 'dark') document.body.classList.add('dark');
+            const iA = L.divIcon({ html: '<div class="w-4 h-4 bg-blue-500 rounded-full border-2 border-white shadow-xl"></div>', className: '' });
+            const iB = L.divIcon({ html: '<div class="text-3xl drop-shadow-xl">🗼</div>', className: '', iconAnchor: [15, 30] });
 
-            // Иконки
-            const iconA = L.divIcon({ className: 'pulse-icon', iconSize: [20, 20] });
-            const iconB = L.divIcon({ 
-                html: '<div style="font-size:30px; transform:translate(-10px, -30px)">🗼</div>', 
-                className: 'dummy' 
+            markerA = L.marker(state.posA, {draggable: true, icon: iA}).addTo(map);
+            markerB = L.marker([0,0], {draggable: true, icon: iB});
+            line = L.polyline([], {color: '#2ea6ff', weight: 3, dashArray: '8, 12'}).addTo(map);
+
+            markerA.on('drag', sync); markerB.on('drag', sync);
+            map.on('click', e => {
+                if(state.mode === 'A') markerA.setLatLng(e.latlng);
+                else { markerB.setLatLng(e.latlng).addTo(map); state.posB = true; }
+                sync();
             });
 
-            markerA = L.marker(state.posA, {draggable: true, icon: iconA}).addTo(map);
-            markerB = L.marker(state.posB || [0,0], {draggable: true, icon: iconB});
-            
-            if (state.posB) markerB.addTo(map);
-
-            polyline = L.polyline([], {color: '#3b82f6', weight: 3, dashArray: '10, 10'}).addTo(map);
-
-            // События
-            map.on('click', onMapClick);
-            markerA.on('drag', updateCalculations);
-            markerB.on('drag', updateCalculations);
-            
-            updateCalculations();
-            
-            // Если нет данных в URL, пытаемся найти пользователя
-            if (window.location.search === "") {
-                locateMe();
+            // Слушатель гироскопа
+            if (window.DeviceOrientationEvent) {
+                window.addEventListener('deviceorientationabsolute', handleRotate, true);
+                window.addEventListener('deviceorientation', handleRotate, true);
             }
         }
 
-        function setMode(m) {
-            state.mode = m;
-            document.getElementById('btnModeA').className = m === 'A' ? 'flex-1 py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all font-semibold bg-blue-500 text-white shadow-lg' : 'flex-1 py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all font-semibold bg-gray-100 dark:bg-slate-700 text-gray-500';
-            document.getElementById('btnModeB').className = m === 'B' ? 'flex-1 py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all font-semibold bg-red-500 text-white shadow-lg' : 'flex-1 py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all font-semibold bg-gray-100 dark:bg-slate-700 text-gray-500';
-            
-            document.getElementById('statusText').innerText = m === 'A' ? 'Выберите своё местоположение' : 'Выберите вышку или антенну';
-        }
-
-        function onMapClick(e) {
-            if (state.mode === 'A') {
-                state.posA = [e.latlng.lat, e.latlng.lng];
-                markerA.setLatLng(state.posA);
-            } else {
-                state.posB = [e.latlng.lat, e.latlng.lng];
-                markerB.setLatLng(state.posB).addTo(map);
+        function handleRotate(e) {
+            let heading = e.webkitCompassHeading || e.alpha;
+            if (heading !== undefined) {
+                // Плавная коррекция для Android (alpha инвертирован)
+                if (!e.webkitCompassHeading) heading = 360 - heading;
+                document.documentElement.style.setProperty('--heading', heading + 'deg');
             }
-            updateCalculations();
-            updateUrl();
         }
 
-        function updateCalculations() {
+        function sync() {
             const pA = markerA.getLatLng();
-            const pB = markerB.getLatLng();
+            if(state.posB) {
+                const pB = markerB.getLatLng();
+                const d = map.distance(pA, pB);
+                document.getElementById('distText').innerText = d > 1000 ? (d/1000).toFixed(1)+' км' : Math.round(d)+' м';
+                line.setLatLngs([pA, pB]);
+                
+                const b = calcBearing(pA.lat, pA.lng, pB.lat, pB.lng);
+                document.documentElement.style.setProperty('--bearing', b + 'deg');
 
-            if (state.posB) {
-                // Расстояние (Haversine)
-                const dist = map.distance(pA, pB);
-                document.getElementById('distanceText').innerText = dist > 1000 
-                    ? (dist / 1000).toFixed(2) + ' км' 
-                    : Math.round(dist) + ' м';
-
-                // Линия
-                polyline.setLatLngs([pA, pB]);
-
-                // Угол (Bearing) для компаса
-                const angle = calculateBearing(pA.lat, pA.lng, pB.lat, pB.lng);
-                document.getElementById('compass').style.transform = `rotate(${angle}deg)`;
+                // Авто-показ компаса при наличии двух точек
+                if(!state.compassVisible) {
+                    showCompass(true);
+                }
             }
         }
 
-        function calculateBearing(lat1, lon1, lat2, lon2) {
-            const φ1 = lat1 * Math.PI / 180;
-            const φ2 = lat2 * Math.PI / 180;
-            const λ1 = lon1 * Math.PI / 180;
-            const λ2 = lon2 * Math.PI / 180;
+        function showCompass(val) {
+            state.compassVisible = val;
+            const widget = document.getElementById('compassWidget');
+            const btn = document.getElementById('compassToggleBtn');
+            if(val) {
+                widget.classList.add('visible');
+                btn.classList.remove('hidden');
+            } else {
+                widget.classList.remove('visible');
+            }
+        }
+
+        function manualToggleCompass() {
+            showCompass(!state.compassVisible);
+        }
+
+        function calcBearing(lat1, lon1, lat2, lon2) {
+            const φ1 = lat1 * Math.PI / 180, φ2 = lat2 * Math.PI / 180, λ1 = lon1 * Math.PI / 180, λ2 = lon2 * Math.PI / 180;
             const y = Math.sin(λ2 - λ1) * Math.cos(φ2);
             const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(λ2 - λ1);
             return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
         }
 
-        async function handleSearch() {
+        async function doSearch() {
             const q = document.getElementById('searchInput').value;
-            if (q.length < 3) return;
-
-            const resultsBox = document.getElementById('searchResults');
-            resultsBox.innerHTML = '<p class="p-3 text-sm">Поиск...</p>';
-            resultsBox.classList.remove('hidden');
-
-            if (state.mode === 'A') {
-                // Поиск адреса (Nominatim)
-                const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${q}`);
-                const data = await res.json();
-                renderResults(data, 'address');
-            } else {
-                // Поиск вышек (Overpass)
-                const center = map.getCenter();
-                const query = `[out:json];
-                    (
-                      node["man_made"="tower"](around:20000,${center.lat},${center.lng});
-                      node["man_made"="mast"](around:20000,${center.lat},${center.lng});
-                      node["communication_tower"](around:20000,${center.lat},${center.lng});
-                      node["tower:type"="communication"](around:20000,${center.lat},${center.lng});
-                    );
-                    out body;`;
-                const res = await fetch('https://overpass-api.de/api/interpreter', {
-                    method: 'POST',
-                    body: query
-                });
-                const data = await res.json();
-                renderResults(data.elements, 'tower');
-            }
+            const rBox = document.getElementById('results');
+            if(q.length < 2) return;
+            rBox.innerHTML = '<div class="p-4 text-xs opacity-50">Поиск...</div>';
+            rBox.classList.remove('hidden');
+            const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${q}&limit=5`);
+            const data = await r.json();
+            rBox.innerHTML = data.map(i => `<div class="search-item" onclick="select(${i.lat},${i.lon})">${i.display_name}</div>`).join('');
         }
 
-        function renderResults(items, type) {
-            const resultsBox = document.getElementById('searchResults');
-            if (!items || items.length === 0) {
-                resultsBox.innerHTML = '<p class="p-3 text-sm">Ничего не найдено рядом</p>';
-                return;
-            }
-
-            resultsBox.innerHTML = items.slice(0, 5).map(item => `
-                <div onclick="selectResult(${item.lat}, ${item.lon})" class="p-3 hover:bg-blue-50 dark:hover:bg-slate-700 cursor-pointer text-sm">
-                    ${item.display_name || item.tags?.name || (type === 'tower' ? 'Вышка связи' : 'Точка на карте')}
-                </div>
-            `).join('');
+        function select(lat, lon) {
+            const ll = [lat, lon];
+            if(state.mode === 'A') markerA.setLatLng(ll);
+            else { markerB.setLatLng(ll).addTo(map); state.posB = true; }
+            map.flyTo(ll, 15);
+            document.getElementById('results').classList.add('hidden');
+            sync();
         }
 
-        function selectResult(lat, lon) {
-            const latlng = [lat, lon];
-            if (state.mode === 'A') {
-                state.posA = latlng;
-                markerA.setLatLng(latlng);
-            } else {
-                state.posB = latlng;
-                markerB.setLatLng(latlng).addTo(map);
-            }
-            map.flyTo(latlng, 15);
-            updateCalculations();
-            updateUrl();
-            document.getElementById('searchResults').classList.add('hidden');
+        function setMode(m) {
+            state.mode = m;
+            document.getElementById('btnA').classList.toggle('active', m === 'A');
+            document.getElementById('btnB').classList.toggle('active', m === 'B');
+            document.getElementById('searchInput').placeholder = m === 'A' ? "Выберите свою точку..." : "Выберите местоположение вышки...";
         }
 
-        function locateMe() {
-            map.locate({setView: true, maxZoom: 16});
-            map.on('locationfound', (e) => {
-                state.posA = [e.latlng.lat, e.latlng.lng];
-                markerA.setLatLng(state.posA);
-                updateCalculations();
-            });
+        function setMap(t) {
+            state.map = t; state.darkMap = false;
+            document.getElementById('darkCheck').checked = false;
+            document.querySelectorAll('.map-preview').forEach(b => b.classList.remove('active'));
+            document.getElementById('m-'+t).classList.add('active');
+            apply();
         }
 
-        function toggleTheme() {
-            document.body.classList.toggle('dark');
-            state.theme = document.body.classList.contains('dark') ? 'dark' : 'light';
-            setMapType(state.theme === 'dark' ? 'dark' : 'light');
+        function toggleDarkMap() { state.darkMap = document.getElementById('darkCheck').checked; apply(); }
+        function apply() { Object.values(tiles).forEach(t => map.removeLayer(t)); if(state.darkMap) tiles.dark.addTo(map); else tiles[state.map].addTo(map); }
+        function toggleUI() { document.body.classList.toggle('light'); }
+        function toggleMenu(id) { document.getElementById(id).classList.toggle('hidden'); }
+        function locate() { map.locate({setView: true, maxZoom: 16}); map.on('locationfound', e => { markerA.setLatLng(e.latlng); sync(); }); }
+        
+        function askSensor() {
+            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission().then(r => { if(r === 'granted') alert('Компас активен!'); });
+            } else { alert('Крути телефон для работы компаса!'); }
         }
 
-        function toggleSettings() {
-            document.getElementById('settingsPanel').classList.toggle('hidden');
-        }
-
-        function setMapType(type) {
-            Object.values(layers).forEach(layer => map.removeLayer(layer));
-            layers[type].addTo(map);
-            state.mapType = type;
-            toggleSettings();
-            updateUrl();
-        }
-
-        function updateUrl() {
-            const params = new URLSearchParams({
-                ax: markerA.getLatLng().lat.toFixed(6),
-                ay: markerA.getLatLng().lng.toFixed(6),
-                bx: state.posB ? markerB.getLatLng().lat.toFixed(6) : '',
-                by: state.posB ? markerB.getLatLng().lng.toFixed(6) : '',
-                z: map.getZoom(),
-                t: state.theme,
-                m: state.mapType
-            });
-            window.history.replaceState({}, '', '?' + params.toString());
-        }
-
-        function parseUrl() {
-            const p = new URLSearchParams(window.location.search);
-            if (p.has('ax')) state.posA = [parseFloat(p.get('ax')), parseFloat(p.get('ay'))];
-            if (p.has('bx')) state.posB = [parseFloat(p.get('bx')), parseFloat(p.get('by'))];
-            if (p.has('z')) state.zoom = parseInt(p.get('z'));
-            if (p.has('t')) state.theme = p.get('t');
-            if (p.has('m')) state.mapType = p.get('m');
-        }
-
-        function copyPermalink() {
-            updateUrl();
-            navigator.clipboard.writeText(window.location.href);
-            alert('Ссылка скопирована!');
+        function copyLink() {
+            const u = `${window.location.origin}${window.location.pathname}?ax=${markerA.getLatLng().lat}&ay=${markerA.getLatLng().lng}`;
+            navigator.clipboard.writeText(u); alert("Данные скопированы!");
         }
 
         window.onload = init;
