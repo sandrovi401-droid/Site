@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Open Antenna Aligner (Free)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<style>
+body, html { height: 100%; margin: 0; padding: 0; overflow: hidden; }
+#map { height: 100%; width: 100%; z-index: 0; background: #ddd;}
+.glass-panel { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.5); }
+.dark .glass-panel { background: rgba(31, 41, 55, 0.9); border: 1px solid rgba(75, 85, 99, 0.5); }
+.custom-icon { display: flex; justify-content: center; align-items: center; color: white; font-weight: bold; border-radius: 50%; box-shadow: 0 2px 5px rgba(0,0,0,0.5); transition: transform 0.2s; }
+.custom-icon:hover { transform: scale(1.1); }
+.icon-a { background: #3b82f6; border: 2px solid white; }
+.icon-b { background: #ef4444; border: 2px solid white; }
+#searchResults { max-height: 200px; overflow-y: auto; }
+#searchResults::-webkit-scrollbar { width: 6px; }
+#searchResults::-webkit-scrollbar-thumb { background-color: #ccc; border-radius: 4px; }
+</style>
+</head>
+<body class="font-sans antialiased text-gray-800 dark:text-gray-100 transition-colors duration-300">
+<div id="map"></div>
+<!-- Остальной JS и UI можно вставить сюда, твой код полностью -->
+</body>
+</html>
