@@ -1,29 +1,400 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Open Antenna Aligner (Free)</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-<style>
-body, html { height: 100%; margin: 0; padding: 0; overflow: hidden; }
-#map { height: 100%; width: 100%; z-index: 0; background: #ddd;}
-.glass-panel { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.5); }
-.dark .glass-panel { background: rgba(31, 41, 55, 0.9); border: 1px solid rgba(75, 85, 99, 0.5); }
-.custom-icon { display: flex; justify-content: center; align-items: center; color: white; font-weight: bold; border-radius: 50%; box-shadow: 0 2px 5px rgba(0,0,0,0.5); transition: transform 0.2s; }
-.custom-icon:hover { transform: scale(1.1); }
-.icon-a { background: #3b82f6; border: 2px solid white; }
-.icon-b { background: #ef4444; border: 2px solid white; }
-#searchResults { max-height: 200px; overflow-y: auto; }
-#searchResults::-webkit-scrollbar { width: 6px; }
-#searchResults::-webkit-scrollbar-thumb { background-color: #ccc; border-radius: 4px; }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Open Antenna Aligner (Free)</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: '#3b82f6',
+                        darkBg: '#1f2937',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body, html { height: 100%; margin: 0; padding: 0; overflow: hidden; }
+        #map { height: 100%; width: 100%; z-index: 0; background: #ddd;}
+        
+        /* Стили UI */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,0.5);
+        }
+        .dark .glass-panel {
+            background: rgba(31, 41, 55, 0.9);
+            border: 1px solid rgba(75, 85, 99, 0.5);
+        }
+        
+        /* Кастомные маркеры Leaflet через CSS */
+        .custom-icon {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-weight: bold;
+            border-radius: 50%;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+            transition: transform 0.2s;
+        }
+        .custom-icon:hover { transform: scale(1.1); }
+        .icon-a { background: #3b82f6; border: 2px solid white; }
+        .icon-b { background: #ef4444; border: 2px solid white; }
+
+        /* Результаты поиска */
+        #searchResults {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        #searchResults::-webkit-scrollbar { width: 6px; }
+        #searchResults::-webkit-scrollbar-thumb { background-color: #ccc; border-radius: 4px; }
+    </style>
 </head>
 <body class="font-sans antialiased text-gray-800 dark:text-gray-100 transition-colors duration-300">
-<div id="map"></div>
-<!-- Остальной JS и UI можно вставить сюда, твой код полностью -->
+
+    <div id="map"></div>
+
+    <div class="absolute top-4 left-4 right-4 md:right-auto md:w-96 flex flex-col gap-3 z-[1000]">
+        <div class="relative">
+            <div class="glass-panel rounded-lg shadow-lg p-1 flex items-center">
+                <i class="fa-solid fa-search text-gray-400 ml-3"></i>
+                <input id="searchInput" type="text" placeholder="Поиск (город, улица)..." 
+                       class="w-full bg-transparent border-none focus:outline-none p-3 text-sm dark:text-white placeholder-gray-500">
+                <div id="searchLoader" class="hidden pr-3 text-brand"><i class="fa-solid fa-circle-notch fa-spin"></i></div>
+            </div>
+            <div id="searchResults" class="hidden absolute w-full mt-1 glass-panel rounded-lg shadow-xl overflow-hidden"></div>
+        </div>
+        
+        <div class="glass-panel rounded-lg shadow-lg p-4 space-y-3">
+            <div class="flex justify-between items-center">
+                <h1 class="font-bold text-lg"><i class="fa-solid fa-tower-broadcast text-brand mr-2"></i>Open Aligner</h1>
+                <button id="themeToggle" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition">
+                    <i class="fa-solid fa-moon"></i>
+                </button>
+            </div>
+
+            <div class="space-y-2 text-xs font-medium text-gray-600 dark:text-gray-400">
+                <div class="flex gap-2">
+                    <button onclick="app.locateUser()" class="flex-1 py-2 bg-brand text-white rounded hover:bg-blue-600 transition shadow-sm">
+                        <i class="fa-solid fa-location-crosshairs mr-1"></i> Я здесь (A)
+                    </button>
+                    <button onclick="app.copyPermalink()" class="px-3 py-2 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 transition" title="Скопировать ссылку">
+                        <i class="fa-solid fa-link"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="absolute bottom-8 left-4 right-4 md:left-auto md:right-4 md:bottom-8 md:w-80 z-[1000]">
+        <div class="glass-panel rounded-xl shadow-2xl p-5 border-l-4 border-brand">
+            <div class="flex justify-between items-start">
+                <div>
+                    <p class="text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">Азимут</p>
+                    <div class="flex items-baseline gap-1">
+                        <span id="azimuthVal" class="text-4xl font-black tabular-nums tracking-tight">000°</span>
+                        <span class="text-sm font-semibold text-gray-500">True</span>
+                    </div>
+                </div>
+                
+                <div class="relative w-16 h-16 bg-gray-200 dark:bg-gray-700 rounded-full shadow-inner flex items-center justify-center border-2 border-gray-300 dark:border-gray-600">
+                    <div class="absolute top-1 text-[8px] font-bold text-gray-500">N</div>
+                    <div id="compassArrow" class="w-1 h-10 bg-red-500 rounded-full relative shadow-sm transition-transform duration-300 ease-out" style="background: linear-gradient(to top, transparent 50%, #ef4444 50%);"></div>
+                </div>
+            </div>
+
+            <div class="mt-4 pt-4 border-t border-gray-300 dark:border-gray-600">
+                <div class="flex justify-between items-center mb-1">
+                    <span class="text-sm text-gray-500">Расстояние</span>
+                    <span id="distanceVal" class="text-lg font-bold tabular-nums">0.00 km</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * Геометрия (Та же математика)
+         */
+        const Geo = {
+            getDistance: (lat1, lon1, lat2, lon2) => {
+                const R = 6371e3; 
+                const φ1 = lat1 * Math.PI / 180;
+                const φ2 = lat2 * Math.PI / 180;
+                const Δφ = (lat2 - lat1) * Math.PI / 180;
+                const Δλ = (lon2 - lon1) * Math.PI / 180;
+                const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+                          Math.cos(φ1) * Math.cos(φ2) *
+                          Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                return R * c; 
+            },
+            getBearing: (lat1, lon1, lat2, lon2) => {
+                const φ1 = lat1 * Math.PI / 180;
+                const φ2 = lat2 * Math.PI / 180;
+                const Δλ = (lon2 - lon1) * Math.PI / 180;
+                const y = Math.sin(Δλ) * Math.cos(φ2);
+                const x = Math.cos(φ1) * Math.sin(φ2) -
+                          Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+                return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+            }
+        };
+
+        class App {
+            constructor() {
+                this.map = null;
+                this.tiles = { light: null, dark: null };
+                this.markers = { A: null, B: null };
+                this.polyline = null;
+                this.searchTimeout = null;
+
+                // Начальное состояние (Центр)
+                this.state = {
+                    aLat: 55.7558, aLng: 37.6173, // Москва по умолчанию
+                    bLat: 55.7600, bLng: 37.6200,
+                    zoom: 13,
+                    isDark: false
+                };
+
+                this.init();
+            }
+
+            init() {
+                this.loadFromUrl();
+                this.setupTheme();
+                this.initMap();
+                this.setupSearch();
+            }
+
+            initMap() {
+                // Инициализация карты Leaflet
+                this.map = L.map('map', { zoomControl: false }).setView([this.state.aLat, this.state.aLng], this.state.zoom);
+                
+                // Перемещаем зум вправо
+                L.control.zoom({ position: 'bottomright' }).addTo(this.map);
+
+                // Слои тайлов (Бесплатные!)
+                // OSM Standard (Light)
+                this.tiles.light = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19,
+                    attribution: '© OpenStreetMap'
+                });
+
+                // CartoDB Dark Matter (Dark) - отлично выглядит
+                this.tiles.dark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                    maxZoom: 19,
+                    attribution: '© CARTO'
+                });
+
+                // Применяем текущий слой
+                this.updateTileLayer();
+
+                // Создаем кастомные иконки (CSS/HTML вместо картинок)
+                const createIcon = (label, colorClass) => L.divIcon({
+                    className: 'bg-transparent',
+                    html: `<div class="custom-icon ${colorClass}" style="width:32px; height:32px;">${label}</div>`,
+                    iconSize: [32, 32],
+                    iconAnchor: [16, 16] // Центр иконки
+                });
+
+                // Маркер A
+                this.markers.A = L.marker([this.state.aLat, this.state.aLng], {
+                    draggable: true,
+                    icon: createIcon('A', 'icon-a')
+                }).addTo(this.map);
+
+                // Маркер B
+                this.markers.B = L.marker([this.state.bLat, this.state.bLng], {
+                    draggable: true,
+                    icon: createIcon('B', 'icon-b')
+                }).addTo(this.map);
+
+                // Линия
+                this.polyline = L.polyline([], {color: '#3b82f6', weight: 4, opacity: 0.8}).addTo(this.map);
+
+                // События
+                this.markers.A.on('drag', () => this.updateCalc());
+                this.markers.B.on('drag', () => this.updateCalc());
+                this.markers.A.on('dragend', () => this.updateUrl());
+                this.markers.B.on('dragend', () => this.updateUrl());
+                
+                this.map.on('zoomend', () => {
+                    this.state.zoom = this.map.getZoom();
+                    this.updateUrl();
+                });
+
+                // Клик по карте перемещает B
+                this.map.on('click', (e) => {
+                    this.markers.B.setLatLng(e.latlng);
+                    this.updateCalc();
+                    this.updateUrl();
+                });
+
+                // Первичный расчет
+                this.updateCalc();
+            }
+
+            updateTileLayer() {
+                if (this.state.isDark) {
+                    this.map.removeLayer(this.tiles.light);
+                    this.map.addLayer(this.tiles.dark);
+                } else {
+                    this.map.removeLayer(this.tiles.dark);
+                    this.map.addLayer(this.tiles.light);
+                }
+            }
+
+            updateCalc() {
+                const posA = this.markers.A.getLatLng();
+                const posB = this.markers.B.getLatLng();
+
+                // Рисуем линию
+                this.polyline.setLatLngs([posA, posB]);
+
+                // Считаем
+                const dist = Geo.getDistance(posA.lat, posA.lng, posB.lat, posB.lng);
+                const bearing = Geo.getBearing(posA.lat, posA.lng, posB.lat, posB.lng);
+
+                // Обновляем UI
+                const distEl = document.getElementById('distanceVal');
+                distEl.innerText = dist < 1000 
+                    ? Math.round(dist) + " m" 
+                    : (dist / 1000).toFixed(2) + " km";
+
+                document.getElementById('azimuthVal').innerText = Math.round(bearing).toString().padStart(3, '0') + "°";
+                document.getElementById('compassArrow').style.transform = `rotate(${bearing}deg)`;
+
+                // Сохраняем в state (но не в url пока драгаем)
+                this.state.aLat = posA.lat; this.state.aLng = posA.lng;
+                this.state.bLat = posB.lat; this.state.bLng = posB.lng;
+            }
+
+            // Поиск через Nominatim (Free OSM Search)
+            setupSearch() {
+                const input = document.getElementById('searchInput');
+                const results = document.getElementById('searchResults');
+                const loader = document.getElementById('searchLoader');
+
+                input.addEventListener('input', (e) => {
+                    const query = e.target.value;
+                    clearTimeout(this.searchTimeout);
+                    results.classList.add('hidden');
+                    
+                    if (query.length < 3) return;
+
+                    loader.classList.remove('hidden');
+                    
+                    // Debounce 1 sec чтобы не спамить бесплатный API
+                    this.searchTimeout = setTimeout(async () => {
+                        try {
+                            const resp = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
+                            const data = await resp.json();
+                            
+                            results.innerHTML = '';
+                            if (data.length > 0) {
+                                results.classList.remove('hidden');
+                                data.slice(0, 5).forEach(item => {
+                                    const div = document.createElement('div');
+                                    div.className = "p-3 border-b border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 text-sm";
+                                    div.innerText = item.display_name;
+                                    div.onclick = () => {
+                                        const lat = parseFloat(item.lat);
+                                        const lon = parseFloat(item.lon);
+                                        this.markers.A.setLatLng([lat, lon]);
+                                        this.map.setView([lat, lon], 14);
+                                        this.updateCalc();
+                                        this.updateUrl();
+                                        results.classList.add('hidden');
+                                        input.value = '';
+                                    };
+                                    results.appendChild(div);
+                                });
+                            }
+                        } catch (err) {
+                            console.error(err);
+                        } finally {
+                            loader.classList.add('hidden');
+                        }
+                    }, 800);
+                });
+            }
+
+            setupTheme() {
+                const toggleBtn = document.getElementById('themeToggle');
+                
+                const applyTheme = () => {
+                    if (this.state.isDark) {
+                        document.documentElement.classList.add('dark');
+                        toggleBtn.innerHTML = '<i class="fa-solid fa-sun text-yellow-400"></i>';
+                    } else {
+                        document.documentElement.classList.remove('dark');
+                        toggleBtn.innerHTML = '<i class="fa-solid fa-moon"></i>';
+                    }
+                    if (this.map) this.updateTileLayer();
+                };
+
+                applyTheme();
+
+                toggleBtn.addEventListener('click', () => {
+                    this.state.isDark = !this.state.isDark;
+                    applyTheme();
+                    this.updateUrl();
+                });
+            }
+
+            locateUser() {
+                this.map.locate({setView: true, maxZoom: 16});
+                this.map.once('locationfound', (e) => {
+                    this.markers.A.setLatLng(e.latlng);
+                    this.updateCalc();
+                    this.updateUrl();
+                });
+                this.map.once('locationerror', () => alert("Геолокация недоступна"));
+            }
+
+            // URL Params
+            updateUrl() {
+                const p = new URLSearchParams();
+                p.set('aLat', this.state.aLat.toFixed(6));
+                p.set('aLng', this.state.aLng.toFixed(6));
+                p.set('bLat', this.state.bLat.toFixed(6));
+                p.set('bLng', this.state.bLng.toFixed(6));
+                p.set('z', this.state.zoom);
+                p.set('dark', this.state.isDark);
+                window.history.replaceState({}, '', `?${p}`);
+            }
+
+            loadFromUrl() {
+                const p = new URLSearchParams(window.location.search);
+                if (p.has('aLat')) this.state.aLat = parseFloat(p.get('aLat'));
+                if (p.has('aLng')) this.state.aLng = parseFloat(p.get('aLng'));
+                if (p.has('bLat')) this.state.bLat = parseFloat(p.get('bLat'));
+                if (p.has('bLng')) this.state.bLng = parseFloat(p.get('bLng'));
+                if (p.has('z')) this.state.zoom = parseInt(p.get('z'));
+                if (p.has('dark')) this.state.isDark = p.get('dark') === 'true';
+            }
+
+            copyPermalink() {
+                navigator.clipboard.writeText(window.location.href)
+                    .then(() => alert("Ссылка скопирована!"))
+                    .catch(() => alert("Ошибка копирования"));
+            }
+        }
+
+        const app = new App();
+    </script>
 </body>
 </html>
