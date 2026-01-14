@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Azimuth Mobile Real Compass</title>
+    <title>Azimuth Mobile Real Compass Pro</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -38,77 +38,46 @@
             border: 1px solid rgba(128,128,128,0.1);
         }
 
+        /* Виджет компаса */
         #compassWidget {
-            position: fixed;
-            bottom: 24px;
-            left: 10px;
-            right: 10px;
-            margin-left: auto;
-            margin-right: auto;
-            max-width: 360px;
-            z-index: 1000;
-            display: none;
-            opacity: 0;
-            transition: opacity 0.3s;
+            position: fixed; bottom: 24px; left: 10px; right: 10px;
+            margin: auto; max-width: 360px; z-index: 1000;
+            display: none; opacity: 0; transition: opacity 0.3s;
         }
-        #compassWidget.visible {
-            display: flex;
-            opacity: 1;
-        }
+        #compassWidget.visible { display: flex; opacity: 1; }
 
         .compass-circle {
-            width: 100px; height: 100px;
-            border-radius: 50%;
-            position: relative;
-            background: var(--ui-bg);
-            border: 3px solid var(--ui-accent);
-            flex-shrink: 0;
-            overflow: hidden;
+            width: 100px; height: 100px; border-radius: 50%; position: relative;
+            background: var(--ui-bg); border: 3px solid var(--ui-accent);
+            flex-shrink: 0; overflow: hidden;
         }
 
-        /* Диск с делениями, который крутится за телефоном */
         .compass-disk {
-            position: absolute;
-            width: 100%; height: 100%;
+            position: absolute; width: 100%; height: 100%;
             transform: rotate(calc(-1deg * var(--heading)));
             transition: transform 0.1s linear;
         }
 
-        /* Стрелка, которая указывает на вышку (угол bearing) */
-        /* Она находится ВНУТРИ диска, чтобы учитывать поворот телефона */
         .needle {
-            position: absolute;
-            top: 50%; left: 50%;
-            width: 4px; height: 70px;
-            margin-left: -2px; margin-top: -35px;
-            transform: rotate(calc(var(--bearing) * 1deg));
-            z-index: 10;
+            position: absolute; top: 50%; left: 50%;
+            width: 4px; height: 70px; margin-left: -2px; margin-top: -35px;
+            transform: rotate(calc(var(--bearing) * 1deg)); z-index: 10;
         }
         .needle::after {
-            content: '';
-            position: absolute;
-            top: 0; left: 50%; transform: translateX(-50%);
-            border-left: 7px solid transparent;
-            border-right: 7px solid transparent;
-            border-bottom: 20px solid #ff3b30;
+            content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+            border-left: 7px solid transparent; border-right: 7px solid transparent; border-bottom: 20px solid #ff3b30;
         }
 
         .controls-stack {
-            position: fixed;
-            bottom: 30px;
-            right: 16px;
-            z-index: 1000;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
+            position: fixed; bottom: 30px; right: 16px; z-index: 1000;
+            display: flex; flex-direction: column; gap: 12px;
         }
-
         .side-btn { 
-            width: 56px; height: 56px; 
-            display: flex; align-items: center; justify-content: center; 
+            width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; 
             font-size: 24px; border-radius: 18px;
         }
 
+        /* Toggle & Inputs */
         .ios-toggle { position: relative; display: inline-block; width: 40px; height: 22px; }
         .ios-toggle input { opacity: 0; width: 0; height: 0; }
         .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #4a5568; transition: .3s; border-radius: 20px; }
@@ -117,30 +86,46 @@
         input:checked + .slider:before { transform: translateX(18px); }
 
         .map-prev { 
-            border: 3px solid transparent; border-radius: 14px; 
-            overflow: hidden; cursor: pointer; position: relative; height: 70px; background: #242f3d;
+            border: 3px solid transparent; border-radius: 14px; overflow: hidden; cursor: pointer; position: relative; height: 70px; background: #242f3d;
         }
         .map-prev.active { border-color: var(--ui-accent); }
-        .bg-scheme { background: repeating-conic-gradient(#555 0% 25%, #444 0% 50%) 50% / 20px 20px; opacity: 0.3; width: 100%; height: 100%; }
-        .bg-sat { background: #1a2a3a; width: 100%; height: 100%; }
-        .map-label { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.3); color: white; font-size: 10px; font-weight: 800; }
+        
+        /* Стили для крестика очистки */
+        .clear-icon {
+            display: none; cursor: pointer; color: #9ca3af; padding: 4px;
+        }
+        .clear-icon:hover { color: #fff; }
+        
+        /* Спиннер загрузки */
+        .loader {
+            border: 3px solid rgba(255,255,255,0.1); border-radius: 50%; border-top: 3px solid var(--ui-accent);
+            width: 20px; height: 20px; animation: spin 1s linear infinite; display: inline-block;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body class="dark">
 
-    <div class="fixed top-4 left-4 right-4 z-[1000] max-w-md mx-auto">
-        <div class="tg-card p-1 flex gap-1 items-center mb-2">
+    <div class="fixed top-4 left-4 right-4 z-[1000] max-w-md mx-auto flex flex-col gap-2">
+        <div class="tg-card p-1 flex gap-1 items-center">
             <button id="btnA" onclick="playTap(); setMode('A')" class="flex-1 py-2 rounded-xl font-bold text-[11px] uppercase bg-[var(--ui-accent)] text-white">Моя точка</button>
             <button id="btnB" onclick="playTap(); setMode('B')" class="flex-1 py-2 rounded-xl font-bold text-[11px] uppercase text-gray-400">Вышка</button>
-            <button onclick="playTap(); toggleMenu('settingsMenu')" class="p-2">⚙️</button>
+            <button onclick="playTap(); toggleMenu('settingsMenu')" class="p-2 text-gray-400 hover:text-white">⚙️</button>
         </div>
 
         <div class="tg-card flex items-center p-1 gap-2 overflow-hidden">
-            <button onclick="playTap(); locate()" class="p-2 bg-gray-500/10 rounded-lg">📍</button>
-            <input id="searchInput" type="text" placeholder="Где ваша антенна?" class="bg-transparent flex-1 outline-none text-sm font-medium">
+            <button onclick="playTap(); locate()" class="p-2 bg-gray-500/10 rounded-lg text-blue-400">📍</button>
+            
+            <div class="flex-1 relative flex items-center">
+                <input id="searchInput" type="text" oninput="toggleClearBtn()" placeholder="Где ваша антенна?" class="bg-transparent w-full outline-none text-sm font-medium pr-6">
+                <div id="clearSearchBtn" onclick="clearSearch()" class="clear-icon absolute right-0 text-lg">✕</div>
+            </div>
+
             <button onclick="playTap(); doSearch()" class="p-2 bg-[var(--ui-accent)] text-white rounded-lg">🔍</button>
+            <button onclick="playTap(); openTowersMenu()" class="p-2 bg-gray-700 text-white rounded-lg ml-1">📡</button>
         </div>
-        <div id="results" class="hidden tg-card mt-1 max-h-48 overflow-y-auto"></div>
+        
+        <div id="results" class="hidden tg-card mt-1 max-h-60 overflow-y-auto"></div>
     </div>
 
     <div id="compassWidget" class="tg-card p-4 items-center gap-4">
@@ -172,12 +157,12 @@
         <div class="text-[10px] font-black uppercase opacity-40 mb-3 tracking-widest">Тип карты</div>
         <div class="grid grid-cols-2 gap-3 mb-4">
             <div onclick="playTap(); setMap('light')" id="m-light" class="map-prev active">
-                <div class="bg-scheme"></div>
-                <div class="map-label"><span class="text-lg">🏙</span><span>СХЕМА</span></div>
+                <div class="w-full h-full bg-gray-600 opacity-30"></div>
+                <div class="absolute inset-0 flex items-center justify-center font-bold text-xs">СХЕМА</div>
             </div>
             <div onclick="playTap(); setMap('sat')" id="m-sat" class="map-prev">
-                <div class="bg-sat"></div>
-                <div class="map-label"><span class="text-lg">🛰</span><span>СПУТНИК</span></div>
+                <div class="w-full h-full bg-[#1a2a3a]"></div>
+                <div class="absolute inset-0 flex items-center justify-center font-bold text-xs">СПУТНИК</div>
             </div>
         </div>
         <div class="flex items-center justify-between pt-2 border-t border-gray-500/10">
@@ -188,10 +173,40 @@
 
     <div id="settingsMenu" class="hidden fixed top-20 right-4 z-[2000] tg-card p-4 w-60">
         <div class="flex items-center justify-between mb-4">
-            <span class="text-[11px] font-bold">Светлая тема меню</span>
+            <span class="text-[11px] font-bold">Светлая тема</span>
             <label class="ios-toggle"><input type="checkbox" onchange="playTap(); toggleUI()"><span class="slider"></span></label>
         </div>
         <button onclick="playTap(); copyLink()" class="w-full py-2 bg-[var(--ui-accent)] text-white rounded-lg text-[11px] font-bold">КОПИРОВАТЬ ДАННЫЕ</button>
+    </div>
+
+    <div id="towersMenu" class="hidden fixed inset-0 z-[3000] bg-black/80 flex items-center justify-center p-4">
+        <div class="tg-card w-full max-w-md h-[80vh] flex flex-col relative overflow-hidden">
+            <div class="p-4 border-b border-gray-500/10 flex justify-between items-center">
+                <h2 class="font-bold text-lg">Ближайшие вышки</h2>
+                <button onclick="closeTowersMenu()" class="text-2xl opacity-50 hover:opacity-100">&times;</button>
+            </div>
+            
+            <div class="p-3 bg-gray-500/5">
+                <input id="towerFilter" type="text" oninput="filterTowers()" placeholder="Фильтр (например: MTS, Tower...)" class="w-full bg-[var(--ui-bg)] p-3 rounded-xl outline-none text-sm border border-gray-500/20">
+                <div class="flex justify-between mt-2 text-[10px] opacity-60 px-1">
+                    <span>Радиус поиска: 5 км</span>
+                    <span id="towerCount">Найдено: 0</span>
+                </div>
+            </div>
+
+            <div id="towersList" class="flex-1 overflow-y-auto p-2 space-y-2">
+                <div class="flex flex-col items-center justify-center h-full text-center opacity-50 gap-2">
+                    <span class="text-3xl">📡</span>
+                    <p class="text-sm">Нажмите кнопку ниже,<br>чтобы найти вышки рядом с точкой А</p>
+                </div>
+            </div>
+
+            <div class="p-4 border-t border-gray-500/10">
+                <button onclick="fetchTowers()" id="scanBtn" class="w-full py-3 bg-[var(--ui-accent)] text-white rounded-xl font-bold text-sm uppercase shadow-lg">
+                    Сканировать эфир
+                </button>
+            </div>
+        </div>
     </div>
 
     <div id="map"></div>
@@ -199,7 +214,9 @@
     <script>
         let state = { mode: 'A', posA: [50.45, 30.52], posB: null, map: 'light', darkMap: false, compassVisible: false };
         let map, markerA, markerB, line;
+        let foundTowers = []; // Хранение найденных вышек
 
+        // Звук
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         function playTap() {
             if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -226,8 +243,8 @@
             map = L.map('map', { zoomControl: false }).setView(state.posA, 11);
             tiles.light.addTo(map);
 
-            const iA = L.divIcon({ html: '<div class="w-4 h-4 bg-blue-500 rounded-full border-2 border-white"></div>', className: '' });
-            const iB = L.divIcon({ html: '<div class="text-3xl">🗼</div>', className: '', iconAnchor: [15, 30] });
+            const iA = L.divIcon({ html: '<div class="w-4 h-4 bg-blue-500 rounded-full border-2 border-white shadow-lg"></div>', className: '' });
+            const iB = L.divIcon({ html: '<div class="text-3xl drop-shadow-md">🗼</div>', className: '', iconAnchor: [15, 30] });
 
             markerA = L.marker(state.posA, {draggable: true, icon: iA}).addTo(map);
             markerB = L.marker([0,0], {draggable: true, icon: iB});
@@ -241,22 +258,17 @@
                 sync();
             });
 
-            // Настройка датчика ориентации
             if (window.DeviceOrientationEvent) {
                 window.addEventListener('deviceorientationabsolute', handleCompass, true);
                 window.addEventListener('deviceorientation', handleCompass, true);
             }
-
             locate();
         }
 
         function handleCompass(e) {
             let heading = e.webkitCompassHeading || e.alpha;
             if (heading === undefined) return;
-            
-            // Если используем alpha (Android), нужно инвертировать
             if (!e.webkitCompassHeading) heading = 360 - heading;
-
             document.documentElement.style.setProperty('--heading', heading);
         }
 
@@ -281,7 +293,7 @@
             const widget = document.getElementById('compassWidget');
             if (state.compassVisible) {
                 widget.classList.add('visible');
-                askSensor(); // Запрашиваем доступ при открытии
+                askSensor();
             } else {
                 widget.classList.remove('visible');
             }
@@ -293,29 +305,173 @@
             return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
         }
 
+        // --- ЛОГИКА ПОИСКА (ОБНОВЛЕННАЯ) ---
         async function doSearch() {
             const q = document.getElementById('searchInput').value;
             const rBox = document.getElementById('results');
             if(q.length < 2) return;
             rBox.classList.remove('hidden');
-            const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${q}&limit=5`);
-            const data = await r.json();
-            rBox.innerHTML = data.map(i => `<div class="p-3 border-b border-gray-500/10 text-xs" onclick="select(${i.lat},${i.lon})">${i.display_name}</div>`).join('');
+            rBox.innerHTML = '<div class="p-4 text-center text-xs opacity-50"><span class="loader"></span></div>';
+            
+            try {
+                const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${q}&limit=5`);
+                const data = await r.json();
+                if(data.length === 0) {
+                    rBox.innerHTML = '<div class="p-3 text-xs opacity-50 text-center">Ничего не найдено</div>';
+                    return;
+                }
+                // Передаем название (display_name) в функцию выбора
+                rBox.innerHTML = data.map(i => {
+                    // Экранируем кавычки для безопасности
+                    const safeName = i.display_name.replace(/'/g, "&apos;");
+                    return `<div class="p-3 border-b border-gray-500/10 text-xs hover:bg-gray-500/10 cursor-pointer" onclick="select(${i.lat},${i.lon}, '${safeName}')">${i.display_name}</div>`;
+                }).join('');
+            } catch(e) {
+                rBox.innerHTML = '<div class="p-3 text-red-400 text-xs">Ошибка сети</div>';
+            }
         }
 
-        function select(lat, lon) {
+        function select(lat, lon, name) {
             const ll = [lat, lon];
             if(state.mode === 'A') markerA.setLatLng(ll);
             else { markerB.setLatLng(ll).addTo(map); state.posB = true; }
             map.flyTo(ll, 15);
             document.getElementById('results').classList.add('hidden');
+            
+            // Вставляем имя в инпут и показываем крестик
+            const input = document.getElementById('searchInput');
+            input.value = name;
+            toggleClearBtn();
+            
             sync();
         }
 
+        function toggleClearBtn() {
+            const v = document.getElementById('searchInput').value;
+            document.getElementById('clearSearchBtn').style.display = v.length > 0 ? 'block' : 'none';
+        }
+
+        function clearSearch() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('results').classList.add('hidden');
+            toggleClearBtn();
+        }
+
+        // --- ЛОГИКА ВЫШЕК (НОВАЯ) ---
+        function openTowersMenu() {
+            document.getElementById('towersMenu').classList.remove('hidden');
+        }
+        function closeTowersMenu() {
+            document.getElementById('towersMenu').classList.add('hidden');
+        }
+
+        async function fetchTowers() {
+            const btn = document.getElementById('scanBtn');
+            const list = document.getElementById('towersList');
+            const center = markerA.getLatLng();
+            
+            btn.disabled = true;
+            btn.innerHTML = '<span class="loader"></span> Сканирую...';
+            list.innerHTML = '';
+
+            // Запрос к Overpass API: Ищем узлы "mast", "tower", "communication" в радиусе 5000м
+            const query = `
+                [out:json][timeout:25];
+                (
+                  node["man_made"~"tower|mast"](around:5000,${center.lat},${center.lng});
+                  node["communication:mobile_phone"](around:5000,${center.lat},${center.lng});
+                );
+                out body;
+            `;
+            
+            try {
+                const resp = await fetch('https://overpass-api.de/api/interpreter', {
+                    method: 'POST',
+                    body: query
+                });
+                const data = await resp.json();
+                
+                // Обработка данных
+                foundTowers = data.elements.map(el => {
+                    const tLatLng = L.latLng(el.lat, el.lon);
+                    const dist = map.distance(center, tLatLng);
+                    return {
+                        id: el.id,
+                        lat: el.lat,
+                        lon: el.lon,
+                        dist: dist,
+                        tags: el.tags || {}
+                    };
+                });
+
+                // Сортировка по дистанции
+                foundTowers.sort((a, b) => a.dist - b.dist);
+                
+                renderTowers(foundTowers);
+                document.getElementById('towerCount').innerText = `Найдено: ${foundTowers.length}`;
+
+            } catch (e) {
+                list.innerHTML = '<div class="text-red-400 text-center mt-10">Ошибка загрузки.<br>Проверьте интернет.</div>';
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'СКАНИРОВАТЬ ЭФИР';
+            }
+        }
+
+        function renderTowers(arr) {
+            const list = document.getElementById('towersList');
+            if (arr.length === 0) {
+                list.innerHTML = '<div class="text-center opacity-50 mt-10">Ничего не найдено в радиусе 5км.</div>';
+                return;
+            }
+
+            list.innerHTML = arr.map(t => {
+                const operator = t.tags.operator || t.tags.brand || "Неизвестный оператор";
+                const type = t.tags.man_made || t.tags["tower:type"] || "Антенна";
+                const distStr = t.dist > 1000 ? (t.dist/1000).toFixed(2) + ' км' : Math.round(t.dist) + ' м';
+                const height = t.tags.height ? `↕ ${t.tags.height}м` : '';
+
+                return `
+                <div onclick="selectTower(${t.lat}, ${t.lon})" class="tg-card p-3 mb-2 flex items-center justify-between cursor-pointer border-l-4 border-[var(--ui-accent)] hover:opacity-80">
+                    <div>
+                        <div class="font-bold text-sm text-white">${operator}</div>
+                        <div class="text-[10px] text-gray-400 uppercase font-bold">${type} ${height}</div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-[var(--ui-accent)] font-black text-lg tabular-nums">${distStr}</div>
+                        <div class="text-[9px] text-gray-500">Дистанция</div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function filterTowers() {
+            const val = document.getElementById('towerFilter').value.toLowerCase();
+            const filtered = foundTowers.filter(t => {
+                const txt = JSON.stringify(t.tags).toLowerCase();
+                return txt.includes(val);
+            });
+            renderTowers(filtered);
+        }
+
+        function selectTower(lat, lon) {
+            closeTowersMenu();
+            setMode('B'); // Переключаем режим на вышку
+            markerB.setLatLng([lat, lon]).addTo(map);
+            state.posB = true;
+            sync();
+            map.flyTo([lat, lon], 16);
+            playTap();
+        }
+
+        // --- ОБЩИЕ ФУНКЦИИ ---
         function setMode(m) {
             state.mode = m;
-            document.getElementById('btnA').className = m === 'A' ? "flex-1 py-2 rounded-xl font-bold text-[11px] uppercase bg-[var(--ui-accent)] text-white" : "flex-1 py-2 rounded-xl font-bold text-[11px] uppercase text-gray-400";
-            document.getElementById('btnB').className = m === 'B' ? "flex-1 py-2 rounded-xl font-bold text-[11px] uppercase bg-[var(--ui-accent)] text-white" : "flex-1 py-2 rounded-xl font-bold text-[11px] uppercase text-gray-400";
+            const activeClass = "flex-1 py-2 rounded-xl font-bold text-[11px] uppercase bg-[var(--ui-accent)] text-white";
+            const inactiveClass = "flex-1 py-2 rounded-xl font-bold text-[11px] uppercase text-gray-400";
+            
+            document.getElementById('btnA').className = m === 'A' ? activeClass : inactiveClass;
+            document.getElementById('btnB').className = m === 'B' ? activeClass : inactiveClass;
             document.getElementById('searchInput').placeholder = m === 'A' ? "Где ваша антенна?" : "Где стоит вышка?";
         }
 
