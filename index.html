@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Azimuth Mobile Real Compass Pro V2</title>
+    <title>Azimuth Pro: Filter & Rotation Fix</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -19,7 +19,7 @@
             --ui-accent: #2ea6ff;
             --heading: 0;
             --bearing: 0;
-            --map-rot: 0;
+            --map-rot: 0deg;
         }
 
         body.light {
@@ -31,19 +31,15 @@
 
         body { font-family: 'Manrope', sans-serif; background: var(--ui-bg); color: var(--ui-text); overflow: hidden; margin: 0; }
         
-        /* Карта теперь может вращаться */
+        /* Контейнер карты с вращением */
         #map-container {
-            position: relative; width: 100vw; height: 100vh; overflow: hidden; z-index: 1;
-        }
-        #map { 
-            height: 120vh; width: 120vw; /* Запас для вращения */
-            position: absolute; top: -10vh; left: -10vw;
-            transition: transform 0.1s linear;
-        }
-        /* Если вращение включено */
-        body.rotate-active #map {
+            position: absolute; top: -50vh; left: -50vw; width: 200vw; height: 200vh;
+            transform-origin: center center;
             transform: rotate(var(--map-rot));
+            transition: transform 0.1s linear;
+            z-index: 1;
         }
+        #map { width: 100%; height: 100%; }
 
         .tg-card {
             background: var(--ui-card);
@@ -113,12 +109,23 @@
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-        /* Стили для селекта */
         .custom-select {
             background: var(--ui-bg); color: var(--ui-text);
             border: 1px solid rgba(128,128,128,0.2);
             padding: 8px; border-radius: 10px; outline: none;
-            font-size: 12px; font-weight: bold;
+            font-size: 11px; font-weight: bold; width: 100%;
+        }
+
+        /* Стиль ползунка вращения */
+        input[type=range] {
+            -webkit-appearance: none; width: 100%; background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 20px; width: 20px; border-radius: 50%;
+            background: var(--ui-accent); margin-top: -8px; border: 2px solid white;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px; background: rgba(128,128,128,0.3); border-radius: 2px;
         }
     </style>
 </head>
@@ -133,14 +140,11 @@
 
         <div class="tg-card flex items-center p-1 gap-2 overflow-hidden">
             <button onclick="playTap(); locate()" class="p-2 bg-gray-500/10 rounded-lg text-blue-400">📍</button>
-            
             <div class="flex-1 relative flex items-center">
                 <input id="searchInput" type="text" oninput="toggleClearBtn()" placeholder="Где ваша антенна?" class="bg-transparent w-full outline-none text-sm font-medium pr-6">
                 <div id="clearSearchBtn" onclick="clearSearch()" class="clear-icon absolute right-0 text-lg">✕</div>
             </div>
-
             <button onclick="playTap(); doSearch()" class="p-2 bg-[var(--ui-accent)] text-white rounded-lg">🔍</button>
-            
             <button id="btnTowerList" onclick="playTap(); openTowersMenu()" class="hidden p-2 bg-gray-700 text-white rounded-lg ml-1 border border-gray-500/30">📡</button>
         </div>
         
@@ -184,6 +188,15 @@
                 <div class="absolute inset-0 flex items-center justify-center font-bold text-xs">СПУТНИК</div>
             </div>
         </div>
+
+        <div class="pt-2 border-t border-gray-500/10 mb-3">
+             <div class="flex justify-between text-[11px] font-bold mb-2">
+                 <span>Вращение карты</span>
+                 <span onclick="resetRot()" class="text-[var(--ui-accent)] cursor-pointer">Сброс</span>
+             </div>
+             <input type="range" min="0" max="360" value="0" id="mapRotator" oninput="manualRotateMap(this.value)">
+        </div>
+
         <div class="flex items-center justify-between pt-2 border-t border-gray-500/10">
             <span class="text-[11px] font-bold">Тёмная схема</span>
             <label class="ios-toggle"><input type="checkbox" id="darkCheck" onchange="playTap(); toggleDarkMap()"><span class="slider"></span></label>
@@ -195,11 +208,6 @@
             <span class="text-[11px] font-bold">Светлая тема</span>
             <label class="ios-toggle"><input type="checkbox" onchange="playTap(); toggleUI()"><span class="slider"></span></label>
         </div>
-        <div class="flex items-center justify-between mb-4">
-            <span class="text-[11px] font-bold leading-tight">Вращать карту<br><span class="opacity-50 text-[9px]">по компасу</span></span>
-            <label class="ios-toggle"><input type="checkbox" id="rotateCheck" onchange="playTap(); toggleMapRotation()"><span class="slider"></span></label>
-        </div>
-
         <button onclick="playTap(); copyLink()" class="w-full py-2 bg-[var(--ui-accent)] text-white rounded-lg text-[11px] font-bold">КОПИРОВАТЬ ДАННЫЕ</button>
     </div>
 
@@ -211,27 +219,38 @@
             </div>
             
             <div class="p-3 bg-gray-500/5 space-y-2">
-                <input id="towerFilter" type="text" oninput="filterTowers()" placeholder="Фильтр (MTS, Life, ID...)" class="w-full bg-[var(--ui-bg)] p-3 rounded-xl outline-none text-sm border border-gray-500/20">
+                <input id="towerFilter" type="text" oninput="filterTowers()" placeholder="Фильтр (Название...)" class="w-full bg-[var(--ui-bg)] p-3 rounded-xl outline-none text-sm border border-gray-500/20">
                 
-                <div class="flex items-center justify-between">
-                    <span class="text-xs font-bold opacity-60 pl-1">Радиус поиска:</span>
-                    <select id="radiusSelect" class="custom-select" onchange="playTap()">
-                        <option value="1">1 км</option>
-                        <option value="2">2 км</option>
-                        <option value="3">3 км</option>
-                        <option value="4">4 км</option>
-                        <option value="5" selected>5 км</option>
-                        <option value="10">10 км</option>
-                        <option value="15">15 км</option>
-                    </select>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <span class="text-[10px] font-bold opacity-60 pl-1 block mb-1">Тип вышки:</span>
+                        <select id="typeSelect" class="custom-select" onchange="playTap()">
+                            <option value="telecom" selected>📡 Связь / ТВ</option>
+                            <option value="all">🌍 Все подряд</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <span class="text-[10px] font-bold opacity-60 pl-1 block mb-1">Радиус поиска:</span>
+                        <select id="radiusSelect" class="custom-select" onchange="playTap()">
+                            <option value="1">1 км</option>
+                            <option value="2">2 км</option>
+                            <option value="3">3 км</option>
+                            <option value="4">4 км</option>
+                            <option value="5" selected>5 км</option>
+                            <option value="10">10 км</option>
+                            <option value="15">15 км</option>
+                        </select>
+                    </div>
                 </div>
+
                 <div class="text-[10px] opacity-60 text-right px-1" id="towerCount">Найдено: 0</div>
             </div>
 
             <div id="towersList" class="flex-1 overflow-y-auto p-2 space-y-2">
                 <div class="flex flex-col items-center justify-center h-full text-center opacity-50 gap-2">
                     <span class="text-3xl">📡</span>
-                    <p class="text-sm">Выберите радиус и нажмите<br>«Сканировать эфир»</p>
+                    <p class="text-sm">Выберите параметры и нажмите<br>«Сканировать эфир»</p>
                 </div>
             </div>
 
@@ -248,7 +267,7 @@
     </div>
 
     <script>
-        let state = { mode: 'A', posA: [50.45, 30.52], posB: null, map: 'light', darkMap: false, compassVisible: false, rotateMap: false };
+        let state = { mode: 'A', posA: [50.45, 30.52], posB: null, map: 'light', darkMap: false, compassVisible: false };
         let map, markerA, markerB, line;
         let foundTowers = [];
 
@@ -291,8 +310,8 @@
                 if(state.mode === 'A') markerA.setLatLng(e.latlng);
                 else { 
                     markerB.setLatLng(e.latlng).addTo(map); 
-                    state.posB = true; 
-                    // Сбрасываем текст если кликнули руками
+                    state.posB = true;
+                    // Если кликнули руками, пишем координаты
                     document.getElementById('searchInput').value = `${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`;
                     toggleClearBtn();
                 }
@@ -310,25 +329,16 @@
             let heading = e.webkitCompassHeading || e.alpha;
             if (heading === undefined) return;
             if (!e.webkitCompassHeading) heading = 360 - heading;
-
-            // Обновляем компас
             document.documentElement.style.setProperty('--heading', heading);
-
-            // Если включено вращение карты
-            if (state.rotateMap) {
-                document.documentElement.style.setProperty('--map-rot', `-${heading}deg`);
-            }
         }
 
-        function toggleMapRotation() {
-            state.rotateMap = document.getElementById('rotateCheck').checked;
-            if(state.rotateMap) {
-                document.body.classList.add('rotate-active');
-                askSensor();
-            } else {
-                document.body.classList.remove('rotate-active');
-                document.documentElement.style.setProperty('--map-rot', `0deg`);
-            }
+        // --- Вращение Карты ---
+        function manualRotateMap(deg) {
+            document.documentElement.style.setProperty('--map-rot', `${deg}deg`);
+        }
+        function resetRot() {
+            document.getElementById('mapRotator').value = 0;
+            manualRotateMap(0);
         }
 
         function sync() {
@@ -395,9 +405,9 @@
             map.flyTo(ll, 15);
             document.getElementById('results').classList.add('hidden');
             
-            // Вставляем имя в инпут и показываем крестик
             const input = document.getElementById('searchInput');
             if(name) input.value = name;
+            else input.value = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
             toggleClearBtn();
             
             sync();
@@ -414,7 +424,7 @@
             toggleClearBtn();
         }
 
-        // --- ЛОГИКА ВЫШЕК ---
+        // --- ЛОГИКА ВЫШЕК (С ФИЛЬТРАМИ) ---
         function openTowersMenu() { document.getElementById('towersMenu').classList.remove('hidden'); }
         function closeTowersMenu() { document.getElementById('towersMenu').classList.add('hidden'); }
 
@@ -423,23 +433,36 @@
             const list = document.getElementById('towersList');
             const center = markerA.getLatLng();
             
-            // Получаем радиус из селекта
             const radiusKm = document.getElementById('radiusSelect').value;
             const radiusM = radiusKm * 1000;
+            const typeMode = document.getElementById('typeSelect').value;
             
             btn.disabled = true;
             btn.innerHTML = '<span class="loader"></span> Сканирую...';
             list.innerHTML = '';
 
-            const query = `
-                [out:json][timeout:25];
+            // Строим запрос в зависимости от фильтра
+            let query = `[out:json][timeout:25];`;
+            if (typeMode === 'telecom') {
+                // Строгий фильтр для Связи/ТВ/Интернета
+                query += `
+                (
+                  node["communication:mobile_phone"](around:${radiusM},${center.lat},${center.lng});
+                  node["man_made"="mast"](around:${radiusM},${center.lat},${center.lng});
+                  node["man_made"="tower"]["tower:type"="communication"](around:${radiusM},${center.lat},${center.lng});
+                  node["tower:type"="communication"](around:${radiusM},${center.lat},${center.lng});
+                );
+                `;
+            } else {
+                // Все подряд (включая водонапорные)
+                query += `
                 (
                   node["man_made"~"tower|mast"](around:${radiusM},${center.lat},${center.lng});
                   node["communication:mobile_phone"](around:${radiusM},${center.lat},${center.lng});
-                  node["tower:type"](around:${radiusM},${center.lat},${center.lng});
                 );
-                out body;
-            `;
+                `;
+            }
+            query += `out body;`;
             
             try {
                 const resp = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: query });
@@ -448,12 +471,17 @@
                 foundTowers = data.elements.map(el => {
                     const tLatLng = L.latLng(el.lat, el.lon);
                     return {
-                        id: el.id,
-                        lat: el.lat,
-                        lon: el.lon,
+                        id: el.id, lat: el.lat, lon: el.lon,
                         dist: map.distance(center, tLatLng),
                         tags: el.tags || {}
                     };
+                }).filter(t => {
+                    // Дополнительная чистка если выбран телеком (иногда man_made=mast это флагштоки)
+                    if(typeMode === 'telecom') {
+                        if(t.tags.man_made === 'water_tower') return false;
+                        if(t.tags.man_made === 'flagpole') return false;
+                    }
+                    return true;
                 });
 
                 foundTowers.sort((a, b) => a.dist - b.dist);
@@ -461,7 +489,7 @@
                 document.getElementById('towerCount').innerText = `Найдено: ${foundTowers.length}`;
 
             } catch (e) {
-                list.innerHTML = '<div class="text-red-400 text-center mt-10">Ошибка загрузки.</div>';
+                list.innerHTML = '<div class="text-red-400 text-center mt-10">Ошибка загрузки (API).</div>';
             } finally {
                 btn.disabled = false;
                 btn.innerText = 'СКАНИРОВАТЬ ЭФИР';
@@ -471,26 +499,23 @@
         function renderTowers(arr) {
             const list = document.getElementById('towersList');
             if (arr.length === 0) {
-                list.innerHTML = '<div class="text-center opacity-50 mt-10">Пусто в этом радиусе.</div>';
+                list.innerHTML = '<div class="text-center opacity-50 mt-10">В этом радиусе чисто.</div>';
                 return;
             }
 
             list.innerHTML = arr.map(t => {
-                // Улучшенный поиск названия
-                const operator = t.tags.operator || t.tags.brand || t.tags.name || t.tags.description || t.tags.ref || `Вышка #${t.id}`;
-                const type = t.tags.man_made || t.tags["tower:type"] || "Антенна";
+                const operator = t.tags.operator || t.tags.brand || t.tags.name || t.tags.description || `Объект #${t.id}`;
+                const type = t.tags["tower:type"] || t.tags.man_made || "Антенна";
                 const distStr = t.dist > 1000 ? (t.dist/1000).toFixed(2) + ' км' : Math.round(t.dist) + ' м';
-                
-                // Экранируем имя для передачи в функцию
                 const safeName = operator.replace(/"/g, '&quot;').replace(/'/g, "\\'");
 
                 return `
                 <div onclick="selectTower(${t.lat}, ${t.lon}, '${safeName}')" class="tg-card p-3 mb-2 flex items-center justify-between cursor-pointer border-l-4 border-[var(--ui-accent)] hover:opacity-80">
-                    <div>
-                        <div class="font-bold text-sm text-white">${operator}</div>
+                    <div class="overflow-hidden">
+                        <div class="font-bold text-sm text-white truncate w-40">${operator}</div>
                         <div class="text-[10px] text-gray-400 uppercase font-bold">${type}</div>
                     </div>
-                    <div class="text-right">
+                    <div class="text-right flex-shrink-0">
                         <div class="text-[var(--ui-accent)] font-black text-lg tabular-nums">${distStr}</div>
                     </div>
                 </div>`;
@@ -510,7 +535,7 @@
             state.posB = true;
             map.flyTo([lat, lon], 16);
             
-            // Вписываем имя в поле
+            // Записываем имя в поиск и включаем крестик
             const input = document.getElementById('searchInput');
             input.value = name || `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
             toggleClearBtn();
@@ -529,7 +554,7 @@
             document.getElementById('btnB').className = m === 'B' ? activeClass : inactiveClass;
             document.getElementById('searchInput').placeholder = m === 'A' ? "Где ваша антенна?" : "Где стоит вышка?";
             
-            // Логика кнопки антенны (только для режима B)
+            // Показываем кнопку антенны ТОЛЬКО в режиме B
             if(m === 'B') document.getElementById('btnTowerList').classList.remove('hidden');
             else document.getElementById('btnTowerList').classList.add('hidden');
         }
