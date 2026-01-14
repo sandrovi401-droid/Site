@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Azimuth Mobile Real Compass Pro</title>
+    <title>Azimuth Mobile Real Compass Pro V2</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -19,6 +19,7 @@
             --ui-accent: #2ea6ff;
             --heading: 0;
             --bearing: 0;
+            --map-rot: 0;
         }
 
         body.light {
@@ -29,7 +30,20 @@
         }
 
         body { font-family: 'Manrope', sans-serif; background: var(--ui-bg); color: var(--ui-text); overflow: hidden; margin: 0; }
-        #map { height: 100vh; width: 100vw; z-index: 1; }
+        
+        /* Карта теперь может вращаться */
+        #map-container {
+            position: relative; width: 100vw; height: 100vh; overflow: hidden; z-index: 1;
+        }
+        #map { 
+            height: 120vh; width: 120vw; /* Запас для вращения */
+            position: absolute; top: -10vh; left: -10vw;
+            transition: transform 0.1s linear;
+        }
+        /* Если вращение включено */
+        body.rotate-active #map {
+            transform: rotate(var(--map-rot));
+        }
 
         .tg-card {
             background: var(--ui-card);
@@ -90,18 +104,22 @@
         }
         .map-prev.active { border-color: var(--ui-accent); }
         
-        /* Стили для крестика очистки */
-        .clear-icon {
-            display: none; cursor: pointer; color: #9ca3af; padding: 4px;
-        }
+        .clear-icon { display: none; cursor: pointer; color: #9ca3af; padding: 4px; }
         .clear-icon:hover { color: #fff; }
         
-        /* Спиннер загрузки */
         .loader {
             border: 3px solid rgba(255,255,255,0.1); border-radius: 50%; border-top: 3px solid var(--ui-accent);
             width: 20px; height: 20px; animation: spin 1s linear infinite; display: inline-block;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Стили для селекта */
+        .custom-select {
+            background: var(--ui-bg); color: var(--ui-text);
+            border: 1px solid rgba(128,128,128,0.2);
+            padding: 8px; border-radius: 10px; outline: none;
+            font-size: 12px; font-weight: bold;
+        }
     </style>
 </head>
 <body class="dark">
@@ -122,7 +140,8 @@
             </div>
 
             <button onclick="playTap(); doSearch()" class="p-2 bg-[var(--ui-accent)] text-white rounded-lg">🔍</button>
-            <button onclick="playTap(); openTowersMenu()" class="p-2 bg-gray-700 text-white rounded-lg ml-1">📡</button>
+            
+            <button id="btnTowerList" onclick="playTap(); openTowersMenu()" class="hidden p-2 bg-gray-700 text-white rounded-lg ml-1 border border-gray-500/30">📡</button>
         </div>
         
         <div id="results" class="hidden tg-card mt-1 max-h-60 overflow-y-auto"></div>
@@ -176,28 +195,43 @@
             <span class="text-[11px] font-bold">Светлая тема</span>
             <label class="ios-toggle"><input type="checkbox" onchange="playTap(); toggleUI()"><span class="slider"></span></label>
         </div>
+        <div class="flex items-center justify-between mb-4">
+            <span class="text-[11px] font-bold leading-tight">Вращать карту<br><span class="opacity-50 text-[9px]">по компасу</span></span>
+            <label class="ios-toggle"><input type="checkbox" id="rotateCheck" onchange="playTap(); toggleMapRotation()"><span class="slider"></span></label>
+        </div>
+
         <button onclick="playTap(); copyLink()" class="w-full py-2 bg-[var(--ui-accent)] text-white rounded-lg text-[11px] font-bold">КОПИРОВАТЬ ДАННЫЕ</button>
     </div>
 
     <div id="towersMenu" class="hidden fixed inset-0 z-[3000] bg-black/80 flex items-center justify-center p-4">
         <div class="tg-card w-full max-w-md h-[80vh] flex flex-col relative overflow-hidden">
             <div class="p-4 border-b border-gray-500/10 flex justify-between items-center">
-                <h2 class="font-bold text-lg">Ближайшие вышки</h2>
+                <h2 class="font-bold text-lg">Поиск вышек</h2>
                 <button onclick="closeTowersMenu()" class="text-2xl opacity-50 hover:opacity-100">&times;</button>
             </div>
             
-            <div class="p-3 bg-gray-500/5">
-                <input id="towerFilter" type="text" oninput="filterTowers()" placeholder="Фильтр (например: MTS, Tower...)" class="w-full bg-[var(--ui-bg)] p-3 rounded-xl outline-none text-sm border border-gray-500/20">
-                <div class="flex justify-between mt-2 text-[10px] opacity-60 px-1">
-                    <span>Радиус поиска: 5 км</span>
-                    <span id="towerCount">Найдено: 0</span>
+            <div class="p-3 bg-gray-500/5 space-y-2">
+                <input id="towerFilter" type="text" oninput="filterTowers()" placeholder="Фильтр (MTS, Life, ID...)" class="w-full bg-[var(--ui-bg)] p-3 rounded-xl outline-none text-sm border border-gray-500/20">
+                
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold opacity-60 pl-1">Радиус поиска:</span>
+                    <select id="radiusSelect" class="custom-select" onchange="playTap()">
+                        <option value="1">1 км</option>
+                        <option value="2">2 км</option>
+                        <option value="3">3 км</option>
+                        <option value="4">4 км</option>
+                        <option value="5" selected>5 км</option>
+                        <option value="10">10 км</option>
+                        <option value="15">15 км</option>
+                    </select>
                 </div>
+                <div class="text-[10px] opacity-60 text-right px-1" id="towerCount">Найдено: 0</div>
             </div>
 
             <div id="towersList" class="flex-1 overflow-y-auto p-2 space-y-2">
                 <div class="flex flex-col items-center justify-center h-full text-center opacity-50 gap-2">
                     <span class="text-3xl">📡</span>
-                    <p class="text-sm">Нажмите кнопку ниже,<br>чтобы найти вышки рядом с точкой А</p>
+                    <p class="text-sm">Выберите радиус и нажмите<br>«Сканировать эфир»</p>
                 </div>
             </div>
 
@@ -209,14 +243,15 @@
         </div>
     </div>
 
-    <div id="map"></div>
+    <div id="map-container">
+        <div id="map"></div>
+    </div>
 
     <script>
-        let state = { mode: 'A', posA: [50.45, 30.52], posB: null, map: 'light', darkMap: false, compassVisible: false };
+        let state = { mode: 'A', posA: [50.45, 30.52], posB: null, map: 'light', darkMap: false, compassVisible: false, rotateMap: false };
         let map, markerA, markerB, line;
-        let foundTowers = []; // Хранение найденных вышек
+        let foundTowers = [];
 
-        // Звук
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         function playTap() {
             if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -240,7 +275,7 @@
         };
 
         function init() {
-            map = L.map('map', { zoomControl: false }).setView(state.posA, 11);
+            map = L.map('map', { zoomControl: false, attributionControl: false }).setView(state.posA, 11);
             tiles.light.addTo(map);
 
             const iA = L.divIcon({ html: '<div class="w-4 h-4 bg-blue-500 rounded-full border-2 border-white shadow-lg"></div>', className: '' });
@@ -254,7 +289,13 @@
             markerB.on('drag', sync);
             map.on('click', e => {
                 if(state.mode === 'A') markerA.setLatLng(e.latlng);
-                else { markerB.setLatLng(e.latlng).addTo(map); state.posB = true; }
+                else { 
+                    markerB.setLatLng(e.latlng).addTo(map); 
+                    state.posB = true; 
+                    // Сбрасываем текст если кликнули руками
+                    document.getElementById('searchInput').value = `${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`;
+                    toggleClearBtn();
+                }
                 sync();
             });
 
@@ -269,7 +310,25 @@
             let heading = e.webkitCompassHeading || e.alpha;
             if (heading === undefined) return;
             if (!e.webkitCompassHeading) heading = 360 - heading;
+
+            // Обновляем компас
             document.documentElement.style.setProperty('--heading', heading);
+
+            // Если включено вращение карты
+            if (state.rotateMap) {
+                document.documentElement.style.setProperty('--map-rot', `-${heading}deg`);
+            }
+        }
+
+        function toggleMapRotation() {
+            state.rotateMap = document.getElementById('rotateCheck').checked;
+            if(state.rotateMap) {
+                document.body.classList.add('rotate-active');
+                askSensor();
+            } else {
+                document.body.classList.remove('rotate-active');
+                document.documentElement.style.setProperty('--map-rot', `0deg`);
+            }
         }
 
         function sync() {
@@ -305,7 +364,7 @@
             return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
         }
 
-        // --- ЛОГИКА ПОИСКА (ОБНОВЛЕННАЯ) ---
+        // --- ЛОГИКА ПОИСКА ---
         async function doSearch() {
             const q = document.getElementById('searchInput').value;
             const rBox = document.getElementById('results');
@@ -320,9 +379,7 @@
                     rBox.innerHTML = '<div class="p-3 text-xs opacity-50 text-center">Ничего не найдено</div>';
                     return;
                 }
-                // Передаем название (display_name) в функцию выбора
                 rBox.innerHTML = data.map(i => {
-                    // Экранируем кавычки для безопасности
                     const safeName = i.display_name.replace(/'/g, "&apos;");
                     return `<div class="p-3 border-b border-gray-500/10 text-xs hover:bg-gray-500/10 cursor-pointer" onclick="select(${i.lat},${i.lon}, '${safeName}')">${i.display_name}</div>`;
                 }).join('');
@@ -340,7 +397,7 @@
             
             // Вставляем имя в инпут и показываем крестик
             const input = document.getElementById('searchInput');
-            input.value = name;
+            if(name) input.value = name;
             toggleClearBtn();
             
             sync();
@@ -357,61 +414,54 @@
             toggleClearBtn();
         }
 
-        // --- ЛОГИКА ВЫШЕК (НОВАЯ) ---
-        function openTowersMenu() {
-            document.getElementById('towersMenu').classList.remove('hidden');
-        }
-        function closeTowersMenu() {
-            document.getElementById('towersMenu').classList.add('hidden');
-        }
+        // --- ЛОГИКА ВЫШЕК ---
+        function openTowersMenu() { document.getElementById('towersMenu').classList.remove('hidden'); }
+        function closeTowersMenu() { document.getElementById('towersMenu').classList.add('hidden'); }
 
         async function fetchTowers() {
             const btn = document.getElementById('scanBtn');
             const list = document.getElementById('towersList');
             const center = markerA.getLatLng();
             
+            // Получаем радиус из селекта
+            const radiusKm = document.getElementById('radiusSelect').value;
+            const radiusM = radiusKm * 1000;
+            
             btn.disabled = true;
             btn.innerHTML = '<span class="loader"></span> Сканирую...';
             list.innerHTML = '';
 
-            // Запрос к Overpass API: Ищем узлы "mast", "tower", "communication" в радиусе 5000м
             const query = `
                 [out:json][timeout:25];
                 (
-                  node["man_made"~"tower|mast"](around:5000,${center.lat},${center.lng});
-                  node["communication:mobile_phone"](around:5000,${center.lat},${center.lng});
+                  node["man_made"~"tower|mast"](around:${radiusM},${center.lat},${center.lng});
+                  node["communication:mobile_phone"](around:${radiusM},${center.lat},${center.lng});
+                  node["tower:type"](around:${radiusM},${center.lat},${center.lng});
                 );
                 out body;
             `;
             
             try {
-                const resp = await fetch('https://overpass-api.de/api/interpreter', {
-                    method: 'POST',
-                    body: query
-                });
+                const resp = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: query });
                 const data = await resp.json();
                 
-                // Обработка данных
                 foundTowers = data.elements.map(el => {
                     const tLatLng = L.latLng(el.lat, el.lon);
-                    const dist = map.distance(center, tLatLng);
                     return {
                         id: el.id,
                         lat: el.lat,
                         lon: el.lon,
-                        dist: dist,
+                        dist: map.distance(center, tLatLng),
                         tags: el.tags || {}
                     };
                 });
 
-                // Сортировка по дистанции
                 foundTowers.sort((a, b) => a.dist - b.dist);
-                
                 renderTowers(foundTowers);
                 document.getElementById('towerCount').innerText = `Найдено: ${foundTowers.length}`;
 
             } catch (e) {
-                list.innerHTML = '<div class="text-red-400 text-center mt-10">Ошибка загрузки.<br>Проверьте интернет.</div>';
+                list.innerHTML = '<div class="text-red-400 text-center mt-10">Ошибка загрузки.</div>';
             } finally {
                 btn.disabled = false;
                 btn.innerText = 'СКАНИРОВАТЬ ЭФИР';
@@ -421,25 +471,27 @@
         function renderTowers(arr) {
             const list = document.getElementById('towersList');
             if (arr.length === 0) {
-                list.innerHTML = '<div class="text-center opacity-50 mt-10">Ничего не найдено в радиусе 5км.</div>';
+                list.innerHTML = '<div class="text-center opacity-50 mt-10">Пусто в этом радиусе.</div>';
                 return;
             }
 
             list.innerHTML = arr.map(t => {
-                const operator = t.tags.operator || t.tags.brand || "Неизвестный оператор";
+                // Улучшенный поиск названия
+                const operator = t.tags.operator || t.tags.brand || t.tags.name || t.tags.description || t.tags.ref || `Вышка #${t.id}`;
                 const type = t.tags.man_made || t.tags["tower:type"] || "Антенна";
                 const distStr = t.dist > 1000 ? (t.dist/1000).toFixed(2) + ' км' : Math.round(t.dist) + ' м';
-                const height = t.tags.height ? `↕ ${t.tags.height}м` : '';
+                
+                // Экранируем имя для передачи в функцию
+                const safeName = operator.replace(/"/g, '&quot;').replace(/'/g, "\\'");
 
                 return `
-                <div onclick="selectTower(${t.lat}, ${t.lon})" class="tg-card p-3 mb-2 flex items-center justify-between cursor-pointer border-l-4 border-[var(--ui-accent)] hover:opacity-80">
+                <div onclick="selectTower(${t.lat}, ${t.lon}, '${safeName}')" class="tg-card p-3 mb-2 flex items-center justify-between cursor-pointer border-l-4 border-[var(--ui-accent)] hover:opacity-80">
                     <div>
                         <div class="font-bold text-sm text-white">${operator}</div>
-                        <div class="text-[10px] text-gray-400 uppercase font-bold">${type} ${height}</div>
+                        <div class="text-[10px] text-gray-400 uppercase font-bold">${type}</div>
                     </div>
                     <div class="text-right">
                         <div class="text-[var(--ui-accent)] font-black text-lg tabular-nums">${distStr}</div>
-                        <div class="text-[9px] text-gray-500">Дистанция</div>
                     </div>
                 </div>`;
             }).join('');
@@ -447,20 +499,23 @@
 
         function filterTowers() {
             const val = document.getElementById('towerFilter').value.toLowerCase();
-            const filtered = foundTowers.filter(t => {
-                const txt = JSON.stringify(t.tags).toLowerCase();
-                return txt.includes(val);
-            });
+            const filtered = foundTowers.filter(t => JSON.stringify(t.tags).toLowerCase().includes(val));
             renderTowers(filtered);
         }
 
-        function selectTower(lat, lon) {
+        function selectTower(lat, lon, name) {
             closeTowersMenu();
-            setMode('B'); // Переключаем режим на вышку
+            setMode('B'); 
             markerB.setLatLng([lat, lon]).addTo(map);
             state.posB = true;
-            sync();
             map.flyTo([lat, lon], 16);
+            
+            // Вписываем имя в поле
+            const input = document.getElementById('searchInput');
+            input.value = name || `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+            toggleClearBtn();
+
+            sync();
             playTap();
         }
 
@@ -473,6 +528,10 @@
             document.getElementById('btnA').className = m === 'A' ? activeClass : inactiveClass;
             document.getElementById('btnB').className = m === 'B' ? activeClass : inactiveClass;
             document.getElementById('searchInput').placeholder = m === 'A' ? "Где ваша антенна?" : "Где стоит вышка?";
+            
+            // Логика кнопки антенны (только для режима B)
+            if(m === 'B') document.getElementById('btnTowerList').classList.remove('hidden');
+            else document.getElementById('btnTowerList').classList.add('hidden');
         }
 
         function setMap(t) {
@@ -497,13 +556,7 @@
         
         function askSensor() {
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                DeviceOrientationEvent.requestPermission()
-                    .then(permissionState => {
-                        if (permissionState === 'granted') {
-                            window.addEventListener('deviceorientation', handleCompass, true);
-                        }
-                    })
-                    .catch(console.error);
+                DeviceOrientationEvent.requestPermission().then(p => { if (p === 'granted') window.addEventListener('deviceorientation', handleCompass, true); });
             }
         }
 
