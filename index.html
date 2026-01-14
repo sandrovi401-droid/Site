@@ -219,13 +219,15 @@
             </div>
             
             <div class="p-3 bg-gray-500/5 space-y-2">
-                <input id="towerFilter" type="text" oninput="filterTowers()" placeholder="Фильтр (Название...)" class="w-full bg-[var(--ui-bg)] p-3 rounded-xl outline-none text-sm border border-gray-500/20">
+                <input id="towerFilter" type="text" oninput="filterTowers()" placeholder="Фильтр по названию..." class="w-full bg-[var(--ui-bg)] p-3 rounded-xl outline-none text-sm border border-gray-500/20">
                 
                 <div class="grid grid-cols-2 gap-2">
                     <div>
-                        <span class="text-[10px] font-bold opacity-60 pl-1 block mb-1">Тип вышки:</span>
+                        <span class="text-[10px] font-bold opacity-60 pl-1 block mb-1">Что ищем:</span>
                         <select id="typeSelect" class="custom-select" onchange="playTap()">
-                            <option value="telecom" selected>📡 Связь / ТВ</option>
+                            <option value="mobile" selected>📡 Моб. Интернет / Связь</option>
+                            <option value="tv">📺 ТВ / Радио</option>
+                            <option value="water">💧 Водонапорные</option>
                             <option value="all">🌍 Все подряд</option>
                         </select>
                     </div>
@@ -234,12 +236,11 @@
                         <span class="text-[10px] font-bold opacity-60 pl-1 block mb-1">Радиус поиска:</span>
                         <select id="radiusSelect" class="custom-select" onchange="playTap()">
                             <option value="1">1 км</option>
-                            <option value="2">2 км</option>
                             <option value="3">3 км</option>
-                            <option value="4">4 км</option>
                             <option value="5" selected>5 км</option>
                             <option value="10">10 км</option>
                             <option value="15">15 км</option>
+                            <option value="30">30 км</option>
                         </select>
                     </div>
                 </div>
@@ -250,7 +251,7 @@
             <div id="towersList" class="flex-1 overflow-y-auto p-2 space-y-2">
                 <div class="flex flex-col items-center justify-center h-full text-center opacity-50 gap-2">
                     <span class="text-3xl">📡</span>
-                    <p class="text-sm">Выберите параметры и нажмите<br>«Сканировать эфир»</p>
+                    <p class="text-sm">Выберите тип и нажмите<br>«Сканировать эфир»</p>
                 </div>
             </div>
 
@@ -265,12 +266,12 @@
     <div id="map-container">
         <div id="map"></div>
     </div>
-
     <script>
         let state = { mode: 'A', posA: [50.45, 30.52], posB: null, map: 'light', darkMap: false, compassVisible: false };
         let map, markerA, markerB, line;
         let foundTowers = [];
 
+        // Звук клика (как в оригинале)
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         function playTap() {
             if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -307,11 +308,12 @@
             markerA.on('drag', sync); 
             markerB.on('drag', sync);
             map.on('click', e => {
-                if(state.mode === 'A') markerA.setLatLng(e.latlng);
-                else { 
+                if(state.mode === 'A') {
+                    markerA.setLatLng(e.latlng);
+                } else { 
                     markerB.setLatLng(e.latlng).addTo(map); 
                     state.posB = true;
-                    // Если кликнули руками, пишем координаты
+                    // Если ставим вышку руками, пишем координаты
                     document.getElementById('searchInput').value = `${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`;
                     toggleClearBtn();
                 }
@@ -322,6 +324,7 @@
                 window.addEventListener('deviceorientationabsolute', handleCompass, true);
                 window.addEventListener('deviceorientation', handleCompass, true);
             }
+            // Сразу пробуем найти геопозицию при старте
             locate();
         }
 
@@ -374,7 +377,20 @@
             return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
         }
 
-        // --- ЛОГИКА ПОИСКА ---
+        // --- ГЕОЛОКАЦИЯ ---
+        function locate() { 
+            map.locate({setView: true, maxZoom: 16}); 
+            map.once('locationfound', e => { 
+                markerA.setLatLng(e.latlng); 
+                sync();
+                // FIX: Записываем координаты в поиск при геолокации
+                const coordStr = `${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`;
+                document.getElementById('searchInput').value = coordStr;
+                toggleClearBtn();
+            }); 
+        }
+
+        // --- ПОИСК МЕСТ ---
         async function doSearch() {
             const q = document.getElementById('searchInput').value;
             const rBox = document.getElementById('results');
@@ -424,7 +440,7 @@
             toggleClearBtn();
         }
 
-        // --- ЛОГИКА ВЫШЕК (С ФИЛЬТРАМИ) ---
+        // --- ЛОГИКА ВЫШЕК (Overpass API) ---
         function openTowersMenu() { document.getElementById('towersMenu').classList.remove('hidden'); }
         function closeTowersMenu() { document.getElementById('towersMenu').classList.add('hidden'); }
 
@@ -435,30 +451,47 @@
             
             const radiusKm = document.getElementById('radiusSelect').value;
             const radiusM = radiusKm * 1000;
-            const typeMode = document.getElementById('typeSelect').value;
+            const typeMode = document.getElementById('typeSelect').value; // mobile, tv, water, all
             
             btn.disabled = true;
-            btn.innerHTML = '<span class="loader"></span> Сканирую...';
+            btn.innerHTML = '<span class="loader"></span> Сканирую эфир...';
             list.innerHTML = '';
 
-            // Строим запрос в зависимости от фильтра
             let query = `[out:json][timeout:25];`;
-            if (typeMode === 'telecom') {
-                // Строгий фильтр для Связи/ТВ/Интернета
+            const area = `(around:${radiusM},${center.lat},${center.lng})`;
+
+            // FIX: Более точные фильтры
+            if (typeMode === 'mobile') {
+                // Ищем все, что похоже на сотовую связь
                 query += `
                 (
-                  node["communication:mobile_phone"](around:${radiusM},${center.lat},${center.lng});
-                  node["man_made"="mast"](around:${radiusM},${center.lat},${center.lng});
-                  node["man_made"="tower"]["tower:type"="communication"](around:${radiusM},${center.lat},${center.lng});
-                  node["tower:type"="communication"](around:${radiusM},${center.lat},${center.lng});
+                  node["communication:mobile_phone"]${area};
+                  node["tower:type"="communication"]${area};
+                  node["man_made"="mast"]${area};
+                  node["man_made"="tower"]["service"~"mobile"]${area};
+                );
+                `;
+            } else if (typeMode === 'tv') {
+                // ТВ и Радио
+                query += `
+                (
+                  node["tower:type"~"transmitter|communication"]${area};
+                  node["man_made"="tower"]["service"~"radio|television"]${area};
+                );
+                `;
+            } else if (typeMode === 'water') {
+                // Водонапорные (часто используются как высоты)
+                query += `
+                (
+                  node["man_made"="water_tower"]${area};
                 );
                 `;
             } else {
-                // Все подряд (включая водонапорные)
+                // Все высотные объекты
                 query += `
                 (
-                  node["man_made"~"tower|mast"](around:${radiusM},${center.lat},${center.lng});
-                  node["communication:mobile_phone"](around:${radiusM},${center.lat},${center.lng});
+                  node["man_made"~"tower|mast|water_tower|chimney"]${area};
+                  node["communication:mobile_phone"]${area};
                 );
                 `;
             }
@@ -468,18 +501,22 @@
                 const resp = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: query });
                 const data = await resp.json();
                 
+                // Обрабатываем данные, убираем дубли и мусор
                 foundTowers = data.elements.map(el => {
-                    const tLatLng = L.latLng(el.lat, el.lon);
                     return {
-                        id: el.id, lat: el.lat, lon: el.lon,
-                        dist: map.distance(center, tLatLng),
+                        id: el.id, 
+                        lat: el.lat, 
+                        lon: el.lon,
+                        dist: map.distance(center, L.latLng(el.lat, el.lon)),
                         tags: el.tags || {}
                     };
                 }).filter(t => {
-                    // Дополнительная чистка если выбран телеком (иногда man_made=mast это флагштоки)
-                    if(typeMode === 'telecom') {
-                        if(t.tags.man_made === 'water_tower') return false;
-                        if(t.tags.man_made === 'flagpole') return false;
+                    // Дополнительная фильтрация после загрузки
+                    if (typeMode === 'mobile') {
+                        // Если искали моб. связь, уберем явные водонапорки, если они случайно попали
+                        if (t.tags.man_made === 'water_tower') return false;
+                        if (t.tags.man_made === 'flagpole') return false;
+                        if (t.tags.man_made === 'chimney') return false;
                     }
                     return true;
                 });
@@ -489,62 +526,110 @@
                 document.getElementById('towerCount').innerText = `Найдено: ${foundTowers.length}`;
 
             } catch (e) {
-                list.innerHTML = '<div class="text-red-400 text-center mt-10">Ошибка загрузки (API).</div>';
+                console.error(e);
+                list.innerHTML = '<div class="text-red-400 text-center mt-10">Ошибка загрузки данных.<br>Попробуйте другой радиус.</div>';
             } finally {
                 btn.disabled = false;
                 btn.innerText = 'СКАНИРОВАТЬ ЭФИР';
             }
         }
 
+        // Хелперы для красивого вывода инфо
+        function getTowerName(tags) {
+            // Пытаемся найти оператора
+            if (tags.operator) return tags.operator;
+            if (tags.brand) return tags.brand;
+            if (tags.name) return tags.name;
+            
+            // Если названия нет, гадаем по типу
+            if (tags["communication:mobile_phone"] === 'yes') return "Сотовая вышка (NoName)";
+            if (tags.man_made === 'water_tower') return "Водонапорная башня";
+            if (tags.man_made === 'chimney') return "Труба котельной";
+            
+            return "Неизвестный объект";
+        }
+
+        function getTowerDesc(tags) {
+            let desc = [];
+            
+            // Технология (LTE, GSM и т.д.) - если есть данные
+            // Часто в OSM это не пишут, но если есть - покажем
+            if (tags["communication:mobile_phone:lte"] === 'yes') desc.push("4G LTE");
+            if (tags["communication:mobile_phone:umts"] === 'yes') desc.push("3G");
+            if (tags["communication:mobile_phone:gsm"] === 'yes') desc.push("2G GSM");
+
+            // Адрес
+            let loc = [];
+            if (tags["addr:city"]) loc.push(tags["addr:city"]);
+            if (tags["addr:village"]) loc.push(tags["addr:village"]);
+            if (tags["addr:street"]) loc.push(tags["addr:street"]);
+            
+            if (loc.length > 0) desc.push(`📍 ${loc.join(', ')}`);
+            else if (tags.description) desc.push(tags.description);
+            else if (tags.note) desc.push(tags.note);
+            else desc.push("Нет описания");
+
+            return desc.join(' | ');
+        }
+
         function renderTowers(arr) {
             const list = document.getElementById('towersList');
             if (arr.length === 0) {
-                list.innerHTML = '<div class="text-center opacity-50 mt-10">В этом радиусе чисто.</div>';
+                list.innerHTML = '<div class="text-center opacity-50 mt-10">Ничего не найдено в этом радиусе.</div>';
                 return;
             }
 
             list.innerHTML = arr.map(t => {
-                const operator = t.tags.operator || t.tags.brand || t.tags.name || t.tags.description || `Объект #${t.id}`;
-                const type = t.tags["tower:type"] || t.tags.man_made || "Антенна";
+                const name = getTowerName(t.tags);
+                const desc = getTowerDesc(t.tags);
                 const distStr = t.dist > 1000 ? (t.dist/1000).toFixed(2) + ' км' : Math.round(t.dist) + ' м';
-                const safeName = operator.replace(/"/g, '&quot;').replace(/'/g, "\\'");
+                
+                // Экранируем кавычки для onclick
+                const safeName = name.replace(/"/g, '&quot;').replace(/'/g, "\\'");
+                const safeDesc = desc.replace(/"/g, '&quot;').replace(/'/g, "\\'");
 
                 return `
-                <div onclick="selectTower(${t.lat}, ${t.lon}, '${safeName}')" class="tg-card p-3 mb-2 flex items-center justify-between cursor-pointer border-l-4 border-[var(--ui-accent)] hover:opacity-80">
-                    <div class="overflow-hidden">
-                        <div class="font-bold text-sm text-white truncate w-40">${operator}</div>
-                        <div class="text-[10px] text-gray-400 uppercase font-bold">${type}</div>
+                <div onclick="selectTower(${t.lat}, ${t.lon}, '${safeName}', '${safeDesc}')" class="tg-card p-3 mb-2 flex flex-col cursor-pointer border-l-4 border-[var(--ui-accent)] hover:opacity-80 relative">
+                    <div class="flex justify-between items-start w-full">
+                        <div class="font-bold text-sm text-white truncate w-48">${name}</div>
+                        <div class="text-[var(--ui-accent)] font-black text-sm tabular-nums ml-2">${distStr}</div>
                     </div>
-                    <div class="text-right flex-shrink-0">
-                        <div class="text-[var(--ui-accent)] font-black text-lg tabular-nums">${distStr}</div>
-                    </div>
+                    <div class="text-[10px] text-gray-400 mt-1 pr-8 leading-tight">${desc}</div>
                 </div>`;
             }).join('');
         }
 
         function filterTowers() {
             const val = document.getElementById('towerFilter').value.toLowerCase();
-            const filtered = foundTowers.filter(t => JSON.stringify(t.tags).toLowerCase().includes(val));
+            const filtered = foundTowers.filter(t => {
+                const combined = JSON.stringify(t.tags).toLowerCase();
+                return combined.includes(val);
+            });
             renderTowers(filtered);
         }
 
-        function selectTower(lat, lon, name) {
+        function selectTower(lat, lon, name, desc) {
             closeTowersMenu();
             setMode('B'); 
             markerB.setLatLng([lat, lon]).addTo(map);
             state.posB = true;
             map.flyTo([lat, lon], 16);
             
-            // Записываем имя в поиск и включаем крестик
+            // Вставляем имя + (если есть) детали в поиск
             const input = document.getElementById('searchInput');
-            input.value = name || `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+            // Если описание короткое (адрес), добавим его
+            if(desc && desc.includes('📍')) {
+                input.value = `${name} (${desc.replace('📍', '').trim()})`;
+            } else {
+                input.value = name;
+            }
             toggleClearBtn();
 
             sync();
             playTap();
         }
 
-        // --- ОБЩИЕ ФУНКЦИИ ---
+        // --- UI ЛОГИКА ---
         function setMode(m) {
             state.mode = m;
             const activeClass = "flex-1 py-2 rounded-xl font-bold text-[11px] uppercase bg-[var(--ui-accent)] text-white";
@@ -554,7 +639,6 @@
             document.getElementById('btnB').className = m === 'B' ? activeClass : inactiveClass;
             document.getElementById('searchInput').placeholder = m === 'A' ? "Где ваша антенна?" : "Где стоит вышка?";
             
-            // Показываем кнопку антенны ТОЛЬКО в режиме B
             if(m === 'B') document.getElementById('btnTowerList').classList.remove('hidden');
             else document.getElementById('btnTowerList').classList.add('hidden');
         }
@@ -577,7 +661,6 @@
             document.getElementById('settingsMenu').classList.add('hidden');
             if(isHidden) menu.classList.remove('hidden');
         }
-        function locate() { map.locate({setView: true, maxZoom: 16}); map.on('locationfound', e => { markerA.setLatLng(e.latlng); sync(); }); }
         
         function askSensor() {
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
