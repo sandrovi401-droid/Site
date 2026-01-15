@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Azimuth Pro: Filter & Rotation Fix</title>
+    <title>Azimuth Pro: Updated UI</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -116,7 +116,6 @@
             font-size: 11px; font-weight: bold; width: 100%;
         }
 
-        /* Стиль ползунка вращения */
         input[type=range] {
             -webkit-appearance: none; width: 100%; background: transparent;
         }
@@ -139,18 +138,19 @@
         </div>
 
         <div class="tg-card flex items-center p-1 gap-2 overflow-hidden">
-            <button onclick="playTap(); locate()" class="p-2 bg-gray-500/10 rounded-lg text-blue-400">📍</button>
+            
+            <button id="btnLocate" onclick="playTap(); locate()" class="p-2 bg-gray-500/10 rounded-lg text-blue-400">📍</button>
+            <button id="btnTowerList" onclick="playTap(); openTowersMenu()" class="hidden p-2 bg-gray-700 text-white rounded-lg border border-gray-500/30">📡</button>
+
             <div class="flex-1 relative flex items-center">
                 <input id="searchInput" type="text" oninput="toggleClearBtn()" placeholder="Где ваша антенна?" class="bg-transparent w-full outline-none text-sm font-medium pr-6">
                 <div id="clearSearchBtn" onclick="clearSearch()" class="clear-icon absolute right-0 text-lg">✕</div>
             </div>
             <button onclick="playTap(); doSearch()" class="p-2 bg-[var(--ui-accent)] text-white rounded-lg">🔍</button>
-            <button id="btnTowerList" onclick="playTap(); openTowersMenu()" class="hidden p-2 bg-gray-700 text-white rounded-lg ml-1 border border-gray-500/30">📡</button>
         </div>
         
         <div id="results" class="hidden tg-card mt-1 max-h-60 overflow-y-auto"></div>
     </div>
-
     <div id="compassWidget" class="tg-card p-4 items-center gap-4">
         <div class="compass-circle" onclick="askSensor()">
             <div class="compass-disk">
@@ -204,11 +204,10 @@
     </div>
 
     <div id="settingsMenu" class="hidden fixed top-20 right-4 z-[2000] tg-card p-4 w-60">
-        <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center justify-between mb-1">
             <span class="text-[11px] font-bold">Светлая тема</span>
             <label class="ios-toggle"><input type="checkbox" onchange="playTap(); toggleUI()"><span class="slider"></span></label>
         </div>
-        <button onclick="playTap(); copyLink()" class="w-full py-2 bg-[var(--ui-accent)] text-white rounded-lg text-[11px] font-bold">КОПИРОВАТЬ ДАННЫЕ</button>
     </div>
 
     <div id="towersMenu" class="hidden fixed inset-0 z-[3000] bg-black/80 flex items-center justify-center p-4">
@@ -233,7 +232,7 @@
                     </div>
 
                     <div>
-                        <span class="text-[10px] font-bold opacity-60 pl-1 block mb-1">Радиус поиска:</span>
+                        <span class="text-[10px] font-bold opacity-60 pl-1 block mb-1">Радиус поиска (от Вас):</span>
                         <select id="radiusSelect" class="custom-select" onchange="playTap()">
                             <option value="1">1 км</option>
                             <option value="3">3 км</option>
@@ -266,12 +265,13 @@
     <div id="map-container">
         <div id="map"></div>
     </div>
+
     <script>
         let state = { mode: 'A', posA: [50.45, 30.52], posB: null, map: 'light', darkMap: false, compassVisible: false };
         let map, markerA, markerB, line;
         let foundTowers = [];
 
-        // Звук клика (как в оригинале)
+        // Звук
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         function playTap() {
             if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -302,19 +302,24 @@
             const iB = L.divIcon({ html: '<div class="text-3xl drop-shadow-md">🗼</div>', className: '', iconAnchor: [15, 30] });
 
             markerA = L.marker(state.posA, {draggable: true, icon: iA}).addTo(map);
-            markerB = L.marker([0,0], {draggable: true, icon: iB});
+            markerB = L.marker([0,0], {draggable: true, icon: iB}); // Изначально не на карте
             line = L.polyline([], {color: '#2ea6ff', weight: 3, dashArray: '8, 12'}).addTo(map);
 
             markerA.on('drag', sync); 
             markerB.on('drag', sync);
+            
+            // ЛОГИКА КЛИКА: Пишем координаты в поле и ставим точку
             map.on('click', e => {
+                const coordStr = `${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`;
+                
                 if(state.mode === 'A') {
                     markerA.setLatLng(e.latlng);
+                    document.getElementById('searchInput').value = coordStr;
+                    toggleClearBtn();
                 } else { 
                     markerB.setLatLng(e.latlng).addTo(map); 
                     state.posB = true;
-                    // Если ставим вышку руками, пишем координаты
-                    document.getElementById('searchInput').value = `${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`;
+                    document.getElementById('searchInput').value = coordStr;
                     toggleClearBtn();
                 }
                 sync();
@@ -324,8 +329,11 @@
                 window.addEventListener('deviceorientationabsolute', handleCompass, true);
                 window.addEventListener('deviceorientation', handleCompass, true);
             }
-            // Сразу пробуем найти геопозицию при старте
+            
+            // При старте ищем гео
             locate();
+            // Обновляем UI кнопок
+            updateInputUI();
         }
 
         function handleCompass(e) {
@@ -335,17 +343,17 @@
             document.documentElement.style.setProperty('--heading', heading);
         }
 
-        // --- Вращение Карты ---
-        function manualRotateMap(deg) {
-            document.documentElement.style.setProperty('--map-rot', `${deg}deg`);
-        }
-        function resetRot() {
-            document.getElementById('mapRotator').value = 0;
-            manualRotateMap(0);
-        }
+        function manualRotateMap(deg) { document.documentElement.style.setProperty('--map-rot', `${deg}deg`); }
+        function resetRot() { document.getElementById('mapRotator').value = 0; manualRotateMap(0); }
 
         function sync() {
             const pA = markerA.getLatLng();
+            // Если перемещаем А, обновляем инпут только если мы в режиме А
+            if(state.mode === 'A') {
+                document.getElementById('searchInput').value = `${pA.lat.toFixed(5)}, ${pA.lng.toFixed(5)}`;
+                toggleClearBtn();
+            }
+
             if(state.posB) {
                 const pB = markerB.getLatLng();
                 const d = map.distance(pA, pB);
@@ -357,9 +365,14 @@
                 document.getElementById('azimuthText').innerText = `Азимут: ${Math.round(b)}°`;
                 
                 if(!state.compassVisible) manualToggleCompass();
+                
+                // Если тащим Б, обновляем инпут если режим Б
+                if(state.mode === 'B') {
+                     document.getElementById('searchInput').value = `${pB.lat.toFixed(5)}, ${pB.lng.toFixed(5)}`;
+                     toggleClearBtn();
+                }
             }
         }
-
         function manualToggleCompass() {
             state.compassVisible = !state.compassVisible;
             const widget = document.getElementById('compassWidget');
@@ -383,14 +396,15 @@
             map.once('locationfound', e => { 
                 markerA.setLatLng(e.latlng); 
                 sync();
-                // FIX: Записываем координаты в поиск при геолокации
-                const coordStr = `${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`;
-                document.getElementById('searchInput').value = coordStr;
-                toggleClearBtn();
+                // Если мы в режиме А, обновляем поле
+                if(state.mode === 'A') {
+                    document.getElementById('searchInput').value = `${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`;
+                    toggleClearBtn();
+                }
             }); 
         }
 
-        // --- ПОИСК МЕСТ ---
+        // --- ПОИСК МЕСТ (Nominatim) ---
         async function doSearch() {
             const q = document.getElementById('searchInput').value;
             const rBox = document.getElementById('results');
@@ -434,9 +448,21 @@
             document.getElementById('clearSearchBtn').style.display = v.length > 0 ? 'block' : 'none';
         }
 
+        // --- ЛОГИКА ОЧИСТКИ (ВАЖНО: удаляет вышку) ---
         function clearSearch() {
             document.getElementById('searchInput').value = '';
             document.getElementById('results').classList.add('hidden');
+            
+            // Если мы в режиме "Вышка" (B), нажатие крестика удаляет метку с карты
+            if(state.mode === 'B') {
+                markerB.removeFrom(map);
+                state.posB = false;
+                line.setLatLngs([]); // Убираем линию
+                
+                // Скрываем компас
+                document.getElementById('compassWidget').classList.remove('visible');
+                state.compassVisible = false;
+            }
             toggleClearBtn();
         }
 
@@ -447,11 +473,13 @@
         async function fetchTowers() {
             const btn = document.getElementById('scanBtn');
             const list = document.getElementById('towersList');
+            
+            // ВАЖНО: Ищем всегда от точки А (Вашей антенны)
             const center = markerA.getLatLng();
             
             const radiusKm = document.getElementById('radiusSelect').value;
             const radiusM = radiusKm * 1000;
-            const typeMode = document.getElementById('typeSelect').value; // mobile, tv, water, all
+            const typeMode = document.getElementById('typeSelect').value;
             
             btn.disabled = true;
             btn.innerHTML = '<span class="loader"></span> Сканирую эфир...';
@@ -460,40 +488,25 @@
             let query = `[out:json][timeout:25];`;
             const area = `(around:${radiusM},${center.lat},${center.lng})`;
 
-            // FIX: Более точные фильтры
             if (typeMode === 'mobile') {
-                // Ищем все, что похоже на сотовую связь
-                query += `
-                (
+                query += `(
                   node["communication:mobile_phone"]${area};
                   node["tower:type"="communication"]${area};
                   node["man_made"="mast"]${area};
                   node["man_made"="tower"]["service"~"mobile"]${area};
-                );
-                `;
+                );`;
             } else if (typeMode === 'tv') {
-                // ТВ и Радио
-                query += `
-                (
+                query += `(
                   node["tower:type"~"transmitter|communication"]${area};
                   node["man_made"="tower"]["service"~"radio|television"]${area};
-                );
-                `;
+                );`;
             } else if (typeMode === 'water') {
-                // Водонапорные (часто используются как высоты)
-                query += `
-                (
-                  node["man_made"="water_tower"]${area};
-                );
-                `;
+                query += `(node["man_made"="water_tower"]${area};);`;
             } else {
-                // Все высотные объекты
-                query += `
-                (
+                query += `(
                   node["man_made"~"tower|mast|water_tower|chimney"]${area};
                   node["communication:mobile_phone"]${area};
-                );
-                `;
+                );`;
             }
             query += `out body;`;
             
@@ -501,23 +514,14 @@
                 const resp = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: query });
                 const data = await resp.json();
                 
-                // Обрабатываем данные, убираем дубли и мусор
                 foundTowers = data.elements.map(el => {
                     return {
-                        id: el.id, 
-                        lat: el.lat, 
-                        lon: el.lon,
+                        id: el.id, lat: el.lat, lon: el.lon,
                         dist: map.distance(center, L.latLng(el.lat, el.lon)),
                         tags: el.tags || {}
                     };
                 }).filter(t => {
-                    // Дополнительная фильтрация после загрузки
-                    if (typeMode === 'mobile') {
-                        // Если искали моб. связь, уберем явные водонапорки, если они случайно попали
-                        if (t.tags.man_made === 'water_tower') return false;
-                        if (t.tags.man_made === 'flagpole') return false;
-                        if (t.tags.man_made === 'chimney') return false;
-                    }
+                    if (typeMode === 'mobile' && (t.tags.man_made === 'water_tower' || t.tags.man_made === 'chimney')) return false;
                     return true;
                 });
 
@@ -534,48 +538,34 @@
             }
         }
 
-        // Хелперы для красивого вывода инфо
         function getTowerName(tags) {
-            // Пытаемся найти оператора
             if (tags.operator) return tags.operator;
             if (tags.brand) return tags.brand;
             if (tags.name) return tags.name;
-            
-            // Если названия нет, гадаем по типу
             if (tags["communication:mobile_phone"] === 'yes') return "Сотовая вышка (NoName)";
             if (tags.man_made === 'water_tower') return "Водонапорная башня";
-            if (tags.man_made === 'chimney') return "Труба котельной";
-            
             return "Неизвестный объект";
         }
 
         function getTowerDesc(tags) {
             let desc = [];
-            
-            // Технология (LTE, GSM и т.д.) - если есть данные
-            // Часто в OSM это не пишут, но если есть - покажем
             if (tags["communication:mobile_phone:lte"] === 'yes') desc.push("4G LTE");
             if (tags["communication:mobile_phone:umts"] === 'yes') desc.push("3G");
             if (tags["communication:mobile_phone:gsm"] === 'yes') desc.push("2G GSM");
-
-            // Адрес
+            
             let loc = [];
-            if (tags["addr:city"]) loc.push(tags["addr:city"]);
             if (tags["addr:village"]) loc.push(tags["addr:village"]);
             if (tags["addr:street"]) loc.push(tags["addr:street"]);
-            
             if (loc.length > 0) desc.push(`📍 ${loc.join(', ')}`);
             else if (tags.description) desc.push(tags.description);
-            else if (tags.note) desc.push(tags.note);
-            else desc.push("Нет описания");
 
-            return desc.join(' | ');
+            return desc.length ? desc.join(' | ') : "Нет данных";
         }
 
         function renderTowers(arr) {
             const list = document.getElementById('towersList');
             if (arr.length === 0) {
-                list.innerHTML = '<div class="text-center opacity-50 mt-10">Ничего не найдено в этом радиусе.</div>';
+                list.innerHTML = '<div class="text-center opacity-50 mt-10">Ничего не найдено.</div>';
                 return;
             }
 
@@ -584,7 +574,6 @@
                 const desc = getTowerDesc(t.tags);
                 const distStr = t.dist > 1000 ? (t.dist/1000).toFixed(2) + ' км' : Math.round(t.dist) + ' м';
                 
-                // Экранируем кавычки для onclick
                 const safeName = name.replace(/"/g, '&quot;').replace(/'/g, "\\'");
                 const safeDesc = desc.replace(/"/g, '&quot;').replace(/'/g, "\\'");
 
@@ -601,10 +590,7 @@
 
         function filterTowers() {
             const val = document.getElementById('towerFilter').value.toLowerCase();
-            const filtered = foundTowers.filter(t => {
-                const combined = JSON.stringify(t.tags).toLowerCase();
-                return combined.includes(val);
-            });
+            const filtered = foundTowers.filter(t => JSON.stringify(t.tags).toLowerCase().includes(val));
             renderTowers(filtered);
         }
 
@@ -615,21 +601,16 @@
             state.posB = true;
             map.flyTo([lat, lon], 16);
             
-            // Вставляем имя + (если есть) детали в поиск
             const input = document.getElementById('searchInput');
-            // Если описание короткое (адрес), добавим его
-            if(desc && desc.includes('📍')) {
-                input.value = `${name} (${desc.replace('📍', '').trim()})`;
-            } else {
-                input.value = name;
-            }
+            if(desc && desc.includes('📍')) input.value = `${name} (${desc.replace('📍', '').trim()})`;
+            else input.value = name;
+            
             toggleClearBtn();
-
             sync();
             playTap();
         }
 
-        // --- UI ЛОГИКА ---
+        // --- УПРАВЛЕНИЕ РЕЖИМАМИ (ЗАМЕНА КНОПОК) ---
         function setMode(m) {
             state.mode = m;
             const activeClass = "flex-1 py-2 rounded-xl font-bold text-[11px] uppercase bg-[var(--ui-accent)] text-white";
@@ -637,10 +618,41 @@
             
             document.getElementById('btnA').className = m === 'A' ? activeClass : inactiveClass;
             document.getElementById('btnB').className = m === 'B' ? activeClass : inactiveClass;
-            document.getElementById('searchInput').placeholder = m === 'A' ? "Где ваша антенна?" : "Где стоит вышка?";
             
-            if(m === 'B') document.getElementById('btnTowerList').classList.remove('hidden');
-            else document.getElementById('btnTowerList').classList.add('hidden');
+            // Меняем UI ввода (кнопки и текст)
+            updateInputUI();
+
+            // Подставляем координаты в инпут при смене режима
+            const input = document.getElementById('searchInput');
+            if(m === 'A') {
+                const p = markerA.getLatLng();
+                input.value = `${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`;
+            } else {
+                if(state.posB) {
+                    const p = markerB.getLatLng();
+                    input.value = `${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`;
+                } else {
+                    input.value = '';
+                }
+            }
+            toggleClearBtn();
+        }
+
+        // Функция меняет кнопку геолокации на кнопку поиска вышек
+        function updateInputUI() {
+            const btnLoc = document.getElementById('btnLocate');
+            const btnList = document.getElementById('btnTowerList');
+            const input = document.getElementById('searchInput');
+            
+            if(state.mode === 'A') {
+                btnLoc.classList.remove('hidden'); // Показать геолокацию
+                btnList.classList.add('hidden');   // Скрыть список вышек
+                input.placeholder = "Где ваша антенна?";
+            } else {
+                btnLoc.classList.add('hidden');    // Скрыть геолокацию
+                btnList.classList.remove('hidden'); // Показать список вышек
+                input.placeholder = "Где стоит вышка?";
+            }
         }
 
         function setMap(t) {
@@ -654,6 +666,7 @@
         function toggleDarkMap() { state.darkMap = document.getElementById('darkCheck').checked; apply(); }
         function apply() { Object.values(tiles).forEach(t => map.removeLayer(t)); if(state.darkMap) tiles.dark.addTo(map); else tiles[state.map].addTo(map); }
         function toggleUI() { document.body.classList.toggle('light'); }
+        
         function toggleMenu(id) { 
             const menu = document.getElementById(id);
             const isHidden = menu.classList.contains('hidden');
@@ -666,11 +679,6 @@
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
                 DeviceOrientationEvent.requestPermission().then(p => { if (p === 'granted') window.addEventListener('deviceorientation', handleCompass, true); });
             }
-        }
-
-        function copyLink() {
-            const u = `${window.location.origin}${window.location.pathname}?ax=${markerA.getLatLng().lat}&ay=${markerA.getLatLng().lng}`;
-            navigator.clipboard.writeText(u); alert("Скопировано!");
         }
 
         window.onload = init;
